@@ -1,0 +1,17 @@
+frontend/node_modules/
+frontend/dist/
+frontend/test-build/
+assets/index.html
+assets/*.o
+vendor/WebView2.h
+vendor/WebView2Loader.dll
+vendor/MicrosoftEdgeWebview2Setup.exe
+DITASHA-Workspace.exe
+*.zip
+tests/update-core
+tests/json-validation
+tests/*.exe
+__pycache__/
+*.key
+workspace.json*
+.env*

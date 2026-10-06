@@ -1,0 +1,120 @@
+name: Build and release Windows app
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Read application version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^#define APP_VERSION "\([0-9.]*\)"/\1/p' src/version.h)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Install Windows compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64
+      - name: Fetch checked SDK inputs
+        run: python3 scripts/fetch-vendor.py
+      - name: Install and check frontend
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run build
+          node build-adapter-test.mjs
+          node ../tests/adapter.mjs
+      - name: Test update metadata and native JSON validation
+        run: |
+          gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-core.c -o tests/update-core
+          ./tests/update-core
+          gcc -Wall -Wextra -Werror -Ivendor tests/json-validation.c -o tests/json-validation
+          ./tests/json-validation
+      - name: Build Windows application and Windows tests
+        run: |
+          python3 pack-frontend.py
+          bash build.sh
+          x86_64-w64-mingw32-gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-windows.c -o tests/update-windows.exe -ladvapi32
+          sha256sum DITASHA-Workspace.exe > DITASHA-Workspace.exe.sha256
+      - name: Store Windows test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-package
+          path: |
+            DITASHA-Workspace.exe
+            tests/update-windows.exe
+            vendor/MicrosoftEdgeWebview2Setup.exe
+          retention-days: 7
+      - name: Store release executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            DITASHA-Workspace.exe
+            DITASHA-Workspace.exe.sha256
+          retention-days: 7
+  windows-tests:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-test-package
+      - name: Verify Microsoft bootstrapper signature
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature .\vendor\MicrosoftEdgeWebview2Setup.exe
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') { throw 'Invalid Microsoft runtime installer signature' }
+      - name: Test updater on Windows
+        shell: pwsh
+        run: |
+          & .\tests\update-windows.exe .\DITASHA-Workspace.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows updater tests failed' }
+  release:
+    needs: [build, windows-tests]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release-files
+      - name: Publish versioned release after tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Bump src/version.h for a new release."
+            exit 0
+          fi
+          git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
+          cat > release-notes.md <<'NOTES'
+          Local Windows x64 workspace with animated AI employees, local projects and chats, free OpenRouter routes, encrypted per-user keys, and GitHub updates.
+
+          The app checks for new stable releases and can download verified updates automatically. Choose Restart to install when ready. Local data stays in LocalAppData.
+
+          This repository is private: configure a fine-grained GitHub token with Contents: Read-only in app Settings to receive updates.
+
+          Download DITASHA-Workspace.exe. Source code and SHA-256 checksum are included below. Windows updater replacement/rollback tests passed; full desktop UI and live AI calls require manual testing.
+          NOTES
+          gh release create "$TAG" release-files/DITASHA-Workspace.exe release-files/DITASHA-Workspace.exe.sha256 release-files/DITASHA-Workspace-Source.zip --target "$GITHUB_SHA" --title "DITASHA Workspace $TAG" --notes-file release-notes.md
