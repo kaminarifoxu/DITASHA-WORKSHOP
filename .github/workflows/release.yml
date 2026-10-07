@@ -88,7 +88,7 @@ jobs:
         shell: powershell
         run: |
           & .\tests\mail-automation.ps1 -Source .\src\assistant-tools.ps1 -TestSchedule
-          if ($LASTEXITCODE -ne 0) { throw 'Mail automation tests failed' }
+          if (-not $?) { throw 'Mail automation tests failed' }
       - name: Verify Microsoft bootstrapper signature
         shell: pwsh
         run: |
