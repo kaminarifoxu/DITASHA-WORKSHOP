@@ -17,3 +17,19 @@ engine.reset();await engine.assign('general');assert.equal(engine.actors.general
 engine.setEnabled(true);const pending=engine.assign('developer');engine.setEnabled(false);await pending;assert.equal(engine.actors.developer.phase,'working');engine.reset();
 assert.equal(engine.snapshot().general.walkingFrame,null);
 console.log('Passed: idle roaming, Amii assignment, desk work, report to Amii, custom rooms, movement toggle and toggle during handoff.');
+const large=new OfficeEngine();large.sync(['general',...Array.from({length:17},(_,i)=>'worker-'+i)]);
+assert.equal(new Set(Object.values(large.actors).map(a=>a.desk)).size,18,'every employee has a unique desk in one office');
+const managerPoint=large.snapshot().general.point;
+async function finishLarge(job){let done=false;job.then(()=>done=true);for(let i=0;i<2500&&!done;i++){large.tick(.05);await Promise.resolve();}assert(done);await job;}
+await finishLarge(large.assign('worker-16'));assert.equal(large.actors['worker-16'].node,large.actors['worker-16'].desk);await finishLarge(large.report('worker-16'));assert.equal(large.actors['worker-16'].node,large.actors.general.desk);assert.deepEqual(large.snapshot().general.point,managerPoint);
+console.log('Passed: 18 employees in one expanding office, unique desks, connected handoff paths and stationary Amii.');
+
+const boardOffice=new OfficeEngine();boardOffice.sync(['general','social','designer','web']);
+const visited=new Set();const posting=boardOffice.postPlan([{employee_id:'social',brief:'Research'},{employee_id:'designer',brief:'Design'},{employee_id:'web',brief:'Code'}]);
+let posted=false;posting.then(()=>posted=true);
+for(let i=0;i<2500&&!posted;i++){boardOffice.tick(.05);const state=boardOffice.snapshot();if(state.general.phase==='assigning')visited.add('amii');for(const id of ['social','designer','web'])if(state[id].phase==='receiving')visited.add(id);await Promise.resolve();}
+assert(posted);await posting;assert.deepEqual([...visited].sort(),['amii','designer','social','web']);
+assert.equal(boardOffice.actors.general.node,boardOffice.actors.general.desk);
+for(const id of ['social','designer','web']){assert.equal(boardOffice.actors[id].node,boardOffice.actors[id].desk);assert.equal(boardOffice.actors[id].phase,'queued');}
+boardOffice.setEnabled(false);await boardOffice.assign('social');assert.equal(boardOffice.board[0].status,'working');await boardOffice.report('social');assert.equal(boardOffice.board[0].status,'done');boardOffice.fail();assert.deepEqual(boardOffice.board.map(t=>t.status),['done','failed','failed']);
+console.log('Passed: Amii board posting, all team members collect work, queued desks, board progress and failure state.');

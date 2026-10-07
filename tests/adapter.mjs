@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 const testRequire=createRequire(process.env.DITASHA_TEST_PACKAGE||new URL('../frontend/package.json',import.meta.url));
 globalThis.DOMParser=testRequire('@xmldom/xmldom').DOMParser;
 let listener,stored=null,key=false,lastOp,lastMessages,failAI=false,failSave=false,dispatchTarget='general',badDispatch=false,failWorker=false,dispatchPrompt='',failTrends=false,handoffTarget='writer';
+const aiCalls=[];
 const feedXML='<rss xmlns:ht="https://trends.google.com/trending/rss"><channel><item><title>FiveM community update</title><pubDate>Wed, 07 Oct 2026 00:00:00 GMT</pubDate><ht:approx_traffic>1000+</ht:approx_traffic><ht:news_item><ht:news_item_title>Community story</ht:news_item_title><ht:news_item_url>https://example.com/story</ht:news_item_url><ht:news_item_source>Example</ht:news_item_source></ht:news_item></item></channel></rss>';
 
 globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},postMessage:message=>{
@@ -13,7 +14,7 @@ globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},post
   else if(op==='saveKey')key=true;
   else if(op==='save'){if(failSave)throw new Error('Disk full');stored=JSON.parse(payload);}
   else if(op==='trends'){if(failTrends)throw new Error('Trends offline');data={rss:feedXML,source:'https://trends.google.com/trending/rss?geo=ID'};}
-  else if(op==='ai'||op==='aiCoding'){lastOp=op;lastMessages=JSON.parse(payload);if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.startsWith('You are Mika')){data={choices:[{message:{content:JSON.stringify({analysis:'Google search trends; source https://example.com/story',handoff_employee_id:handoffTarget,brief:'Write a caption based on the supplied trend'})}}]};}else if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
+  else if(op==='ai'||op==='aiCoding'){lastOp=op;lastMessages=JSON.parse(payload);aiCalls.push({op,messages:lastMessages});if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.startsWith('You are Mika')){data={choices:[{message:{content:JSON.stringify({analysis:'Google search trends; source https://example.com/story',handoff_employee_id:handoffTarget,brief:'Write a caption based on the supplied trend'})}}]};}else if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
  }catch(error){ok=false;data={error:error.message};}
  queueMicrotask(()=>listener({data:{id:Number(id),ok,data}}));
 }}}};
@@ -24,6 +25,7 @@ assert.throws(()=>parseTrendFeed('<!DOCTYPE rss><rss/>'));
 assert.equal(parseTrendFeed(feedXML.replace('https://example.com/story','http://example.com/story'))[0].links.length,0);
 const {api,native,exportBackup,importBackup,validateState}=await import('../frontend/test-build/desktop.mjs');
 assert.equal((await api('/api/workspace')).employees.length,7);
+assert.equal(new Set((await api('/api/workspace')).employees.map(e=>e.avatar)).size,7,'each built-in employee has a distinct character');
 assert.equal((await api('/api/workspace')).connected,false);
 await native('saveKey','sk-or-v1-test-only-1234567890');
 const p=await api('/api/workspace',{type:'project',name:'Local Project',description:'Offline brief'});
@@ -48,9 +50,9 @@ assert(!before.includes('sk-or-'));assert.equal((await api('/api/workspace')).em
 console.log('Passed: local CRUD, project context, coding/general routing, AI failure, disk failure, backup validation, key exclusion.');
 
 const events=[];dispatchTarget='developer';
-const delegated=await api('/api/chat',{chat_id:gc.id,content:'Build a website',onAssign:async id=>events.push('assign:'+id),onReport:async id=>events.push('report:'+id)});
+const delegated=await api('/api/chat',{chat_id:gc.id,content:'Debug a FiveM resource',onAssign:async id=>events.push('assign:'+id),onReport:async id=>events.push('report:'+id)});
 assert.deepEqual(events,['assign:developer','report:developer']);assert.equal(lastOp,'aiCoding');assert(delegated.messages[1].content.includes('Hasil dari Rei'));
-assert(lastMessages.at(-1).content.includes('Build a website'));
+assert(lastMessages.at(-1).content.includes('Debug a FiveM resource'));
 const stable=await exportBackup();badDispatch=true;
 await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Test'}),/membagi tugas/);assert.equal(await exportBackup(),stable);badDispatch=false;
 dispatchTarget='missing';await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Test'}),/tidak valid/);assert.equal(await exportBackup(),stable);
@@ -76,3 +78,23 @@ const beforeTrendsFailure=await exportBackup();failTrends=true;await assert.reje
 handoffTarget='missing';await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Cari tren'}),/handoff/);assert.equal(await exportBackup(),beforeTrendsFailure);
 console.log('Passed: live trend feed parsing, Mika-to-Nara handoff, source/date evidence, offline feed and invalid handoff without history loss.');
 await import('./office-motion.mjs');
+
+// The router's single-worker answer must still expand website creation into a real shared workflow.
+dispatchTarget='web';failTrends=false;failWorker=false;events.length=0;aiCalls.length=0;
+let teamPlan;
+const website=await api('/api/chat',{chat_id:gc.id,content:'Buatkan website landing page untuk komunitas',onPlan:async steps=>{teamPlan=steps;},onAssign:async id=>events.push('assign:'+id),onReport:async id=>events.push('report:'+id)});
+assert.deepEqual(teamPlan.map(s=>s.employee_id),['social','designer','web']);
+assert.deepEqual(events,['assign:social','report:social','assign:designer','report:designer','assign:web','report:web']);
+const designerCall=aiCalls.find(c=>c.messages[0].content.startsWith('You are Luna'));
+const codingCall=aiCalls.find(c=>c.messages[0].content.startsWith('You are Sora'));
+assert.equal(codingCall.op,'aiCoding');
+assert.equal(JSON.parse(designerCall.messages.at(-1).content).earlier_team_results[0].name,'Mika');
+assert.deepEqual(JSON.parse(codingCall.messages.at(-1).content).earlier_team_results.map(c=>c.name),['Mika','Luna']);
+assert(website.messages[1].content.includes('Mika → Luna → Sora'));
+failTrends=true;
+const offlineWebsite=await api('/api/chat',{chat_id:gc.id,content:'Make a landing page website'});
+assert(offlineWebsite.messages[1].content.includes('bukan tren terverifikasi'));failTrends=false;
+const beforeTeamFailure=await exportBackup();failWorker=true;
+await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Build a landing page website'}),/Worker quota/);
+assert.equal(await exportBackup(),beforeTeamFailure);failWorker=false;
+console.log('Passed: website teamwork, research/design passed to coding, live-research fallback and unchanged history after team failure.');

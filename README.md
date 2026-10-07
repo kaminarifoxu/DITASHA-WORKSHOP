@@ -12,7 +12,7 @@ Amii routes writing to Nara, planning to Kira, FiveM code/assets to Rei, website
 
 Mika fetches the public Google Trends Indonesia RSS feed, creates an evidence-based trend brief, and hands it to a writer, designer or another relevant specialist for a concrete deliverable. Source links and fetch time are included. These are Google search trends, not verified TikTok/Instagram viral rankings. This feature adds a fixed HTTPS request to trends.google.com; API keys are never sent there. It runs only when you ask Mika for a task. Feed failures are shown without fabricated trends. Clicking an employee card explicitly requests that employee through Amii.
 
-Employees roam the floor while idle with a fixed-scale walking cycle, alternating steps and arm swings. Walking frames follow actual distance traveled and characters turn left/right with their route. Amii remains at his desk while other employees move. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. Extra rooms contain Amii and up to three specialists; the active task automatically opens the specialist’s room.
+Employees roam the floor while idle with a fixed-scale walking cycle, alternating steps and arm swings. Walking frames follow actual distance traveled and characters turn left/right with their route. Amii remains at his desk while other employees move. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. All employees share one larger office. Every employee has a separate desk, with connected corridors to Amii. The floor grows automatically when custom employees are added; there are no room pages. Scroll within the office to see the full floor on smaller windows. The seven built-in employees have seven distinct characters; the custom employee picker offers all seven styles.
 
 ## AI and data
 
@@ -55,3 +55,8 @@ bash build.sh
 The Microsoft SDK header/loader use pinned checksums. The runtime bootstrapper is downloaded from Microsoft and its Authenticode signature is verified in the Windows CI job. React UI, images and native components are embedded into the EXE.
 
 See [README.txt](README.txt) for file locations and setup details, and [THIRD-PARTY.txt](THIRD-PARTY.txt) for dependency notices. No customer data, OpenRouter key, or GitHub token belongs in this repository.
+
+## Board workflow and coordinated projects (3.6.0)
+Amii posts tasks at the shared office board. Assigned specialists collect their briefs and return to their own desks; their board cards show queued, working, completed or interrupted states. Each specialist carries completed results back to Amii. Website creation uses Mika (audience and market research), Luna (visual design), then Sora (complete code based on the preceding contributions). Larger tasks can use up to six relevant specialists in dependency order. Explicit requests for one named employee remain individual tasks.
+
+Mika uses Google search trends when relevant; this is not a design-gallery browser or proof of design popularity. If live research fails during a team website project, the team continues with clearly labeled general recommendations. All contributions appear in the final saved reply. Failed team jobs do not overwrite saved conversation history. Existing local projects, chats and settings use the same storage.

@@ -39,6 +39,7 @@ jobs:
           npm run build
           node build-adapter-test.mjs
           node ../tests/adapter.mjs
+          node ../tests/office-motion.mjs
       - name: Test update metadata and native JSON validation
         run: |
           gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-core.c -o tests/update-core
@@ -121,7 +122,7 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Amii stays at his desk. Employees receive briefs there, work at their own desks, and return with results. Fixed walking sprite scale, added Luna for design, Rei for FiveM code/assets, Sora for website code, and Mika for live Google Trends Indonesia research with a handoff to another employee. Nara and Kira remain available. Includes a movement toggle, local projects/chats, free-only OpenRouter routes and verified updates.
+          Amii walks to the shared task board to post work. Assigned employees collect their briefs, work at their own desks and carry completed results back to Amii. The board displays team progress. Website creation coordinates Mika’s audience/market research, Luna’s visual design and Sora’s code, passing earlier contributions to the next specialist. Live Google Trends failures fall back to clearly labeled general recommendations for team projects. Local projects, chats and settings are preserved. Includes distinct characters, animated walking and verified updates.
 
           The app checks for new stable releases and can download verified updates automatically. Choose Restart to install when ready. Local data stays in LocalAppData.
 

@@ -1,5 +1,6 @@
 import {parseTrendFeed,trendSources} from './trends';
-import {assignmentPrompt,requestedEmployee} from './assignment';
+import {assignmentPrompt} from './assignment';
+import {resolveTeamPlan,type TeamStep} from './team-plan';
 import {agents, type Employee, type Chat, type Message, type Project} from './workspace';
 import {FREE_MODEL, FREE_CODING_MODEL, isCodingEmployee} from './ai-policy';
 
@@ -29,7 +30,7 @@ export function validateState(input:unknown):State{
  const ids=new Set<string>();
  for(const p of s.projects){if(!str(p.id,100)||ids.has(p.id)||!str(p.name,100)||!str(p.description,1000)||!str(p.notes,30000)||!Number.isFinite(p.updated))throw new Error('Proyek backup tidak valid.');ids.add(p.id);}
  const people=new Set(agents.map(a=>a.id));
- for(const e of s.employees){if(!str(e.id,100)||people.has(e.id)||!str(e.name,60)||!str(e.role,100)||!str(e.instruction,8000)||!Number.isInteger(e.avatar)||e.avatar<0||e.avatar>3)throw new Error('Karyawan backup tidak valid.');people.add(e.id);}
+ for(const e of s.employees){if(!str(e.id,100)||people.has(e.id)||!str(e.name,60)||!str(e.role,100)||!str(e.instruction,8000)||!Number.isInteger(e.avatar)||e.avatar<0||e.avatar>6)throw new Error('Karyawan backup tidak valid.');people.add(e.id);}
  const chats=new Set<string>();
  for(const c of s.chats){if(!str(c.id,100)||chats.has(c.id)||!str(c.title,100)||!people.has(c.agent)||(c.project_id!==null&&!ids.has(c.project_id))||!Number.isFinite(c.updated))throw new Error('Percakapan backup tidak valid.');chats.add(c.id);}
  const messages=new Set<string>();
@@ -61,17 +62,17 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
    const team=[...agents,...next.employees];
    let employee=team.find(e=>e.id===chat.agent)!;
    let brief=text;
+   let steps:TeamStep[]=[];
    {
     const history=next.messages.filter(m=>m.chat_id===chat.id).slice(-8);
     const project=next.projects.find(p=>p.id===chat.project_id);
     const dispatch=await native('ai',JSON.stringify([{role:'system',content:assignmentPrompt(team,project?{name:project.name,description:project.description,notes:project.notes.slice(0,12000)}:null)},...history.map(m=>({role:m.role,content:m.content})),{role:'user',content:text}]));
     const raw=dispatch?.choices?.[0]?.message?.content;
     let plan;try{plan=JSON.parse(typeof raw==='string'?raw.replace(/^```(?:json)?\s*|\s*```$/g,'').trim():'');}catch{throw new Error('Amii belum dapat membagi tugas. Coba kirim lagi.');}
-    const requested=requestedEmployee(text,team);
-    const chosen=requested||team.find(e=>e.id===plan?.employee_id);
-    if(!chosen||typeof plan.brief!=='string'||!plan.brief.trim()||plan.brief.length>16000)throw new Error('Pembagian tugas Amii tidak valid. Coba lagi.');
-    employee=chosen;brief=requested&&requested.id!==plan.employee_id?text:plan.brief;
-    await body.onAssign?.(employee.id);
+    steps=resolveTeamPlan(plan,text,team);
+    employee=team.find(e=>e.id===steps[0].employee_id)!;brief=steps[0].brief;
+    await body.onPlan?.(steps);
+
    }
    const project=next.projects.find(p=>p.id===chat.project_id);
    const history=next.messages.filter(m=>m.chat_id===chat.id).sort((a,b)=>a.created-b.created).slice(-16);
@@ -81,7 +82,30 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
     const answer=result?.choices?.[0]?.message?.content;if(typeof answer!=='string'||!answer.trim())throw new Error('AI belum memberikan jawaban. Coba lagi.');return answer;
    };
    let delivered:string;
-   if(employee.id==='social'){
+   if(steps.length>1){
+    const contributions:{employee_id:string;name:string;brief:string;result:string}[]=[];
+    let evidence='';
+    for(const step of steps){
+     const worker=team.find(e=>e.id===step.employee_id)!;
+     await body.onAssign?.(worker.id);
+     let research='';
+     if(worker.id==='social'){
+      try{
+       const feed=await native('trends','',60000),trends=parseTrendFeed(feed?.rss),fetchedAt=new Date().toISOString();
+       research=JSON.stringify({source:feed.source,fetchedAt,trends});evidence=trendSources(trends,fetchedAt);
+      }catch{
+       research='Live Google Trends feed unavailable. Do not claim any current trend verification. Give clearly labeled evergreen audience and design recommendations.';
+       evidence='\n\nRiset langsung tidak tersedia. Mika memakai rekomendasi umum, bukan tren terverifikasi.';
+      }
+     }
+     const answer=await ask(worker,JSON.stringify({original_request:text,your_task:step.brief,earlier_team_results:contributions,live_research:research}),
+      ' This is a coordinated team project. Produce your own contribution, using earlier team results as reference. Pass concrete decisions and usable output to the next specialist. Do not return routing JSON. Do not claim to browse design sites. The final specialist must deliver the complete requested result using earlier research and design.');
+     contributions.push({employee_id:worker.id,name:worker.name,brief:step.brief,result:answer});
+     await body.onReport?.(worker.id);
+    }
+    delivered='Amii · Kerja tim: '+contributions.map(c=>c.name).join(' → ')+'\n\n'+contributions.map(c=>'Hasil dari '+c.name+'\n'+c.result).join('\n\n')+evidence;
+   }else if(employee.id==='social'){
+    await body.onAssign?.(employee.id);
     const feed=await native('trends','',60000),trends=parseTrendFeed(feed?.rss),fetchedAt=new Date().toISOString();
     const roster=team.filter(e=>!['general','social'].includes(e.id));
     const raw=await ask(employee,JSON.stringify({original_request:text,brief,live_trends:{source:feed.source,fetchedAt,trends}}),' Return ONLY JSON {"analysis":"trend findings, source URLs, relevance and suggested content angles","handoff_employee_id":"valid roster id","brief":"concrete deliverable for the next employee"}. Pick a next employee for the user objective: writer for posts/scripts/captions, designer for visuals/branding, web for website code, developer for FiveM, planner for plans. Use recent supplied evidence; flag stale items and never imply Google search trends are TikTok or Instagram rankings. If trends are irrelevant, say so and suggest a clearly labeled evergreen idea. Next employees: '+JSON.stringify(roster.map(e=>({id:e.id,name:e.name,role:e.role}))));
@@ -93,6 +117,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
     await body.onReport?.(nextWorker.id);
     delivered='Amii · Mika → '+nextWorker.name+'\n\nRiset tren Mika\n'+handoff.analysis+'\n\nHasil dari '+nextWorker.name+'\n'+answer+trendSources(trends,fetchedAt);
    }else{
+    await body.onAssign?.(employee.id);
     const answer=await ask(employee,brief===text?text:JSON.stringify({original_request:text,task_from_Amii:brief}));
     await body.onReport?.(employee.id);delivered=employee.id!=='general'?'Amii · Hasil dari '+employee.name+'\n\n'+answer:answer;
    }
@@ -107,7 +132,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
   }
   if(body.type==='project')next.projects.push({id,name:field(body.name,100,'Nama'),description:typeof body.description==='string'?body.description.trim().slice(0,1000):'',notes:'',updated:now});
   else if(body.type==='employee'){
-   if(!Number.isInteger(body.avatar)||body.avatar<0||body.avatar>3)throw new Error('Karakter tidak valid.');
+   if(!Number.isInteger(body.avatar)||body.avatar<0||body.avatar>6)throw new Error('Karakter tidak valid.');
    next.employees.push({id,name:field(body.name,60,'Nama'),role:field(body.role,100,'Peran'),instruction:field(body.instruction,8000,'Instruksi'),avatar:body.avatar,color:agents[body.avatar].color,description:field(body.role,100,'Peran'),tag:'CUSTOM'});
   }else if(body.type==='chat'){
    if(![...agents,...next.employees].some(e=>e.id===body.agent))throw new Error('Karyawan tidak valid.');
