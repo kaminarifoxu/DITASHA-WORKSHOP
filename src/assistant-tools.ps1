@@ -99,6 +99,7 @@ try{
   'mailSchedule' {$state=Mail-State;Mail-Schedule ($request.enabled -eq $true);$state.enabled=($request.enabled -eq $true);Mail-Save $state;$result=Mail-View $state}
   {$_ -in @('mailScan','mailAutomatic')} {$state=Mail-State;if($action -eq 'mailAutomatic' -and !$state.enabled){$result=@{skipped=$true}}else{$result=Mail-Scan $state $accounts}}
   'mailExport' {$state=Mail-State;$path=Mail-Export $state;Mail-Save $state;$result=@{path=$path}}
+  'mailReportData' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){$result=@{available=$false}}else{if((Get-Item -LiteralPath $path).Length -gt 4000000){throw 'Laporan Excel terlalu besar untuk sync. Maksimal 4 MB.'};$result=@{available=$true;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($path))}}}
   'mailReportOpen' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){throw 'Laporan belum tersedia. Jalankan pemeriksaan email dahulu.'};Start-Process -FilePath $path;$result=@{opened=$true}}
   'mailReview' {
    $state=Mail-State;$record=$state.records|Where-Object {$_.id -eq $request.id -and $_.category -eq 'Keuangan'}|Select-Object -First 1;if(!$record){throw 'Email pembayaran tidak ditemukan.'}

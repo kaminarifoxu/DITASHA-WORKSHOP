@@ -130,6 +130,7 @@ done:
 }
 #include "chatgpt.h"
 #include "api-providers.h"
+#include "sync.h"
 #include "trends.h"
 #include "assistant-tools.h"
 static BOOL updater_operation(App *app,const WCHAR *operation,unsigned long id,const WCHAR *payload);
@@ -165,6 +166,8 @@ static HRESULT STDMETHODCALLTYPE bridge_invoke(ICoreWebView2WebMessageReceivedEv
     }else if(!wcscmp(message,L"openLink")) {
         BOOL valid=(!wcsncmp(line2,L"https://",8)||!wcsncmp(line2,L"http://",7))&&wcslen(line2)<2048;for(const WCHAR *p=line2;*p;p++)if(*p<=32||*p==L'"'||*p==L'\\')valid=FALSE;
         if(valid&&(INT_PTR)ShellExecuteW(app->window,L"open",line2,NULL,NULL,SW_SHOWNORMAL)>32)send_reply(app,id,TRUE,"true");else fail_reply(app,id,"Tautan tidak dapat dibuka.");
+    }else if(sync_operation(app,message,id,line2)) {
+        /* Outbound phone relay, credentials remain DPAPI encrypted. */
     }else if(tools_operation(app,message,id,line2)) {
         /* Folder selection and read-only IMAP tools. */
     }else if(!wcscmp(message,L"hasKey")) {

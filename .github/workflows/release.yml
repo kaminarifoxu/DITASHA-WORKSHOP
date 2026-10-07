@@ -1,4 +1,4 @@
-name: Build and release Windows app
+name: Build and release desktop, Android and sync server
 on:
   push:
     branches: [main]
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
@@ -41,6 +41,8 @@ jobs:
           node ../tests/adapter.mjs
           node ../tests/office-motion.mjs
           node ../tests/characters-3d.mjs
+      - name: Test sync server authentication and recovery
+        run: node --test sync-server/test/*.test.mjs
       - name: Test update metadata and native JSON validation
         run: |
           gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-core.c -o tests/update-core
@@ -75,6 +77,33 @@ jobs:
           path: |
             DITASHA-Workspace.exe
             DITASHA-Workspace.exe.sha256
+          retention-days: 7
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK inputs
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Preserve personal preview signing key
+        uses: actions/cache@v4
+        with:
+          path: android-companion/signing
+          key: ditasha-android-preview-signing-v1
+      - name: Build and verify Android companion
+        env:
+          DITASHA_ANDROID_KEYSTORE: signing/preview.keystore
+        run: bash android-companion/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: |
+            android-companion/build/DITASHA-Companion.apk
+            android-companion/build/DITASHA-Companion.apk.sha256
           retention-days: 7
   windows-tests:
     needs: build
@@ -117,7 +146,7 @@ jobs:
             Write-Warning 'Live trends feed unavailable on this runner; app reports an error and does not invent trends.'
           }
   release:
-    needs: [build, windows-tests]
+    needs: [build, windows-tests, android]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -128,6 +157,14 @@ jobs:
         with:
           name: windows-release
           path: release-files
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release-files
+      - name: Package Debian sync server
+        run: |
+          python3 scripts/package-sync-server.py --output release-files/DITASHA-Sync-Server.zip
+          sha256sum release-files/DITASHA-Sync-Server.zip > release-files/DITASHA-Sync-Server.zip.sha256
       - name: Publish versioned release after tests
         env:
           GH_TOKEN: ${{ github.token }}
@@ -140,26 +177,14 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Adds Lora's 20-minute Windows background mail sorting, resumable read-only IMAP scans, local categories and an automatically updated Excel payment report. Achi receives a payment review queue with conservative amount/currency extraction and confirmed, duplicate-safe IDR ledger imports. No email moves or automatic money transfers. PC must be awake, online and signed in; attachments are not processed.
+          Adds a Debian VPS sync server, Windows PC pairing and an Android 8+ companion for workspace.gremoryy.my.id. Phone tasks queue offline and run through Amii's employee workflow while the PC app is open. Recent chats, employee model labels, projects, payment metadata and the available Lora/Achi Excel report sync through HTTPS. Text/code files can be submitted and generated files downloaded.
 
-          Replaces the chibi characters with shared, shaded 3D employee models using adult proportions. Adds an in-app Gmail connection guide for Lora. All 50 character poses render with valid geometry.
+          Includes account login, single-use PC pairing, encrypted PC tokens, revocation, idempotent requests and durable completion recovery. Interrupted work requires review instead of automatic reruns. API keys and Gmail credentials remain on the PC. One PC and one owner are supported. Android background push notifications and phone model editing are not included.
 
-          The previous update remade all ten employees in one consistent chibi style with fixed proportions and shared idle, walking and working animations. Adds Achi for IDR income/expenses/budgets, Lora for multiple Gmail/IMAP inboxes and reply drafts, and Dante for selected-folder inventories, text previews and reviewed rename/move actions. Email credentials stay encrypted on the PC; no automatic email sending, file deletion or overwriting.
+          Download DITASHA-Workspace.exe for Windows, DITASHA-Companion.apk for Android and DITASHA-Sync-Server.zip for the VPS. Follow the server package README for DNS, Docker and either existing Nginx or Caddy HTTPS setup. VPS deployment still requires your server configuration. The Android APK is a personal preview; build/signature checks pass, but physical-device testing and live VPS/AI account testing require your setup.
 
-          Adds a one-time recommended free OpenRouter team preset, improved built-in role prompts, visible employee instructions and alternative model IDs. Gemma powers general roles and North Mini Code powers FiveM/web roles with at least 8192 output tokens. Custom employee assignments are preserved. Live model availability and quotas require account testing.
+          Existing office collaboration, Lora's 20-minute sorting and Achi's reviewed IDR ledger imports remain available. No automatic email sending or money transfers.
 
-          Improves chat layout, renders safe Markdown, adds confirmed single/all chat deletion, text/code attachments and generated file download cards using a Windows Save dialog. Attachments are preserved in chat history/backups and sent to assigned providers. Binary files, PDF and images are not supported.
-
-          Fixes ChatGPT response parsing for standard SSE formatting and completed JSON replies. Adds specific usage/session/token-limit/connection errors and displays completed refusal text. Incomplete jobs are rejected without automatic retries.
-
-          Fixes ChatGPT sign-in by migrating the PC identifier to a stable UUID v4 URN. Adds OpenRouter, Groq, Gemini, OpenAI API and custom HTTPS compatible endpoints, encrypted provider keys, model catalogs/manual model IDs, and provider/model choices for every employee. OpenRouter defaults to free-only mode; API billing is separate from a ChatGPT subscription. Live account login and API access require Windows testing.
-
-          Mika posts research at the task board, then Luna and Sora work concurrently. Sora integrates Luna's completed design before both report to Amii. The native worker pool supports up to three simultaneous requests across providers and preserves updater restart protection. Local backup data includes model assignments and excludes credentials.
-
-          The app checks for new stable releases and can download verified updates automatically. Choose Restart to install when ready. Local data stays in LocalAppData.
-
-          This repository is private: configure a fine-grained GitHub token with Contents: Read-only in app Settings to receive updates.
-
-          Download DITASHA-Workspace.exe. Source code and SHA-256 checksum are included below. Windows updater replacement/rollback tests passed; full desktop UI and live AI calls require manual testing.
+          This repository is private. Configure a fine-grained GitHub token with Contents: Read-only in app Settings for Windows updates. Source code and SHA-256 checksums are included.
           NOTES
-          gh release create "$TAG" release-files/DITASHA-Workspace.exe release-files/DITASHA-Workspace.exe.sha256 release-files/DITASHA-Workspace-Source.zip --target "$GITHUB_SHA" --title "DITASHA Workspace $TAG" --notes-file release-notes.md
+          gh release create "$TAG" release-files/DITASHA-Workspace.exe release-files/DITASHA-Workspace.exe.sha256 release-files/DITASHA-Workspace-Source.zip release-files/DITASHA-Companion.apk release-files/DITASHA-Companion.apk.sha256 release-files/DITASHA-Sync-Server.zip release-files/DITASHA-Sync-Server.zip.sha256 --target "$GITHUB_SHA" --title "DITASHA Workspace $TAG" --notes-file release-notes.md

@@ -8,7 +8,8 @@ import {resolveTeamPlan,type TeamStep} from './team-plan';
 import {agents, type Employee, type Chat, type Message, type Project} from './workspace';
 import {FREE_CODING_MODEL} from './ai-policy';
 
-type State={version:1;projects:Project[];chats:Chat[];employees:Employee[];messages:Message[];ai?:AIConfig;recommendedPreset?:1;money?:Money};
+type SyncReceipt={id:string;chatId:string|null;status:'prepared'|'running'|'completed'|'failed';resultId?:string;result?:string};
+type State={version:1;projects:Project[];chats:Chat[];employees:Employee[];messages:Message[];ai?:AIConfig;recommendedPreset?:1;money?:Money;syncJobs?:SyncReceipt[]};
 type Reply={id:number;ok:boolean;data:any};
 declare global { interface Window { chrome?:{webview?:{postMessage:(value:string)=>void;addEventListener:(name:string,listener:(event:MessageEvent<Reply>)=>void)=>void}} } }
 let sequence=0;
@@ -40,6 +41,7 @@ export function validateState(input:unknown):State{
  const messages=new Set<string>();
  for(const m of s.messages){if(!str(m.id,100)||messages.has(m.id)||!chats.has(m.chat_id)||!['user','assistant'].includes(m.role)||!str(m.content,1000000)||!Number.isFinite(m.created))throw new Error('Pesan backup tidak valid.');if(m.attachments!==undefined)m.attachments=validateAttachments(m.attachments);messages.add(m.id);}
  if(s.recommendedPreset!==undefined&&s.recommendedPreset!==1)throw new Error('Versi preset AI tidak valid.');
+ if(s.syncJobs!==undefined){if(!Array.isArray(s.syncJobs)||s.syncJobs.length>1000||new Set(s.syncJobs.map(r=>r.id)).size!==s.syncJobs.length)throw new Error('Riwayat sync tidak valid.');for(const r of s.syncJobs)if(!str(r.id,100)||!['prepared','running','completed','failed'].includes(r.status)||(r.chatId!==null&&!chats.has(r.chatId))||(r.resultId!==undefined&&!messages.has(r.resultId))||(r.result!==undefined&&!str(r.result,1000000)))throw new Error('Tugas sync tidak valid.');}
  const clean=structuredClone(s);if(s.money!==undefined)clean.money=validateMoney(s.money);if(s.ai!==undefined)clean.ai=validateAIConfig(s.ai,people);return clean;
 }
 let state:State|undefined;
@@ -64,6 +66,21 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
  }
  return mutate(async()=>{
   const next=structuredClone(state!),now=Date.now(),id=crypto.randomUUID();
+  if(url==='/api/sync/prepare'){
+   if(typeof body.id!=='string'||!/^[a-f0-9-]{36}$/.test(body.id)||!['chat','email-check','payment-review'].includes(body.type))throw new Error('Tugas ponsel tidak valid.');
+   const receipts=next.syncJobs||[];const existing=receipts.find(r=>r.id===body.id);if(existing)return {...existing,result:existing.result||next.messages.find(m=>m.id===existing.resultId)?.content||''};
+   let chatId:string|null=null;if(body.type==='chat'){
+    if(body.chatId){const chat=next.chats.find(c=>c.id===body.chatId);if(!chat)throw new Error('Percakapan dari ponsel tidak ditemukan pada PC ini.');chatId=chat.id;}
+    else {const employee=[...agents,...next.employees].find(e=>e.id===body.agent);if(!employee)throw new Error('Karyawan tidak ditemukan.');if(body.projectId&&!next.projects.some(p=>p.id===body.projectId))throw new Error('Proyek tidak ditemukan.');chatId=id;next.chats.push({id,title:'Tugas dari ponsel',agent:'general',project_id:body.projectId||null,updated:now});}
+   }
+   const receipt:SyncReceipt={id:body.id,chatId,status:'prepared'};next.syncJobs=[...receipts.slice(-999),receipt];await save(next);return receipt;
+  }
+  if(url==='/api/sync/receipt'){
+   const receipt=next.syncJobs?.find(r=>r.id===body.id);if(!receipt)throw new Error('Tugas sync tidak ditemukan.');
+   if(receipt.status==='completed')return receipt;
+   if(!['running','completed','failed'].includes(body.status))throw new Error('Status tugas tidak valid.');receipt.status=body.status;
+   if(body.result!==undefined){if(typeof body.result!=='string'||body.result.length>1000000)throw new Error('Hasil sync terlalu besar.');receipt.result=body.result;}await save(next);return receipt;
+  }
   if(url==='/api/money/import-mail'){
    if(typeof body.id!=='string'||!/^[a-f0-9]{64}$/.test(body.id))throw new Error('ID email pembayaran tidak valid.');
    const payment=await native('assistantTools',JSON.stringify({action:'mailPayment',id:body.id}),210000);
@@ -87,11 +104,12 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
   if(url==='/api/chats/delete'){
    const ids=body.all===true?new Set(next.chats.map(c=>c.id)):new Set([field(body.id,100,'Percakapan')]);
    if(body.all!==true&&!next.chats.some(c=>ids.has(c.id)))throw new Error('Percakapan tidak ditemukan.');
-   next.chats=next.chats.filter(c=>!ids.has(c.id));next.messages=next.messages.filter(m=>!ids.has(m.chat_id));await save(next);return {deleted:ids.size};
+   next.chats=next.chats.filter(c=>!ids.has(c.id));next.messages=next.messages.filter(m=>!ids.has(m.chat_id));next.syncJobs=next.syncJobs?.map(r=>ids.has(r.chatId||'')?{...r,chatId:null,resultId:undefined}:r);await save(next);return {deleted:ids.size};
   }
   if(url==='/api/chat'){
    const text=field(body.content,8000,'Pesan'),chat=next.chats.find(c=>c.id===body.chat_id);
    if(!chat)throw new Error('Percakapan tidak ditemukan.');
+   if(body.remoteJobId){const receipt=next.syncJobs?.find(r=>r.id===body.remoteJobId&&r.chatId===chat.id);if(!receipt||receipt.status!=='prepared')throw new Error('Tugas ponsel sudah dijalankan atau perlu ditinjau.');receipt.status='running';await save(structuredClone(next));}
    const attachments=validateAttachments(body.attachments),reference=fileContext(attachments);
    const team=[...agents,...next.employees];
    const config=validateAIConfig(next.ai),[chatgpt,keys]:[ChatGPTInfo,KeyStatus]=await Promise.all([native('chatgptStatus'),native('apiKeyStatus')]);
@@ -198,6 +216,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
    }
    const messages:Message[]=[{id:crypto.randomUUID(),chat_id:chat.id,role:'user',content:text,created:now,...(attachments.length?{attachments}:{})},{id:crypto.randomUUID(),chat_id:chat.id,role:'assistant',content:delivered,created:now+1}];
    next.messages.push(...messages);chat.updated=now;chat.title=history.length?chat.title:text.slice(0,60);
+   if(body.remoteJobId){const receipt=next.syncJobs!.find(r=>r.id===body.remoteJobId)!;receipt.status='completed';receipt.resultId=messages[1].id;}
    await save(next);return {messages};
   }
   if(method==='PATCH'){
@@ -219,3 +238,11 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
 }
 export async function exportBackup(){await ready();return JSON.stringify(state,null,2);}
 export async function importBackup(text:string){if(text.length>16000000)throw new Error('Backup maksimal 16 MB.');const next=validateState(JSON.parse(text));await ready();await mutate(()=>save(next));}
+export async function cloudSnapshot(){
+ await ready();const s=state!,ai=validateAIConfig(s.ai),chats=s.chats.slice().sort((a,b)=>b.updated-a.updated).slice(0,300),ids=new Set(chats.map(c=>c.id));
+ let messages=s.messages.filter(m=>ids.has(m.chat_id)).slice(-200).map(({id,chat_id,role,content,created})=>({id,chat_id,role,content,created}));
+ while(messages.length&&new TextEncoder().encode(JSON.stringify(messages)).length>1200000)messages.shift();
+ return {chats,projects:s.projects.slice(0,300).map(({id,name,description})=>({id,name,description})),employees:[...agents,...s.employees].slice(0,100).map(e=>({id:e.id,name:e.name,role:e.role,color:e.color,model:ai.employees[e.id]?.model||'',provider:ai.employees[e.id]?.provider||''})),messages,partial:messages.length<s.messages.length||chats.length<s.chats.length,money:validateMoney(s.money)};
+}
+
+export async function cloudReceipts(ids:string[]){await ready();return (state!.syncJobs||[]).filter(r=>ids.includes(r.id)&&['completed','failed'].includes(r.status)).map(r=>({id:r.id,status:r.status,result:r.result||state!.messages.find(m=>m.id===r.resultId)?.content||''}));}

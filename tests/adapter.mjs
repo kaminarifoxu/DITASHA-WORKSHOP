@@ -225,3 +225,31 @@ failMailAck=false;const retry=await afterRestart.api('/api/money/import-mail',{i
 const again=await afterRestart.api('/api/money/import-mail',{id:mailId});assert.equal(again.money.transactions.filter(t=>t.id==='mail-'+mailId).length,1);
 mailPayments=[{...mailPayments[0],id:'b'.repeat(64),review:'confirmed',transactionDate:'2026-02-30'}];await assert.rejects(afterRestart.api('/api/money/import-mail',{id:'b'.repeat(64)}),/tidak valid/);
 console.log('Passed: reviewed IDR-only email ledger import, authoritative native evidence, disk failure preservation and duplicate-safe retry after partial handoff failure.');
+
+// Phone work must survive restart without repeating provider calls.
+const remoteId='11111111-1111-4111-8111-111111111111';
+const prepared=await afterRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'});
+assert.equal(prepared.status,'prepared');
+assert.equal((await afterRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'})).chatId,prepared.chatId);
+const beforeRemote=aiCalls.length;
+await afterRestart.api('/api/chat',{chat_id:prepared.chatId,remoteJobId:remoteId,content:'Buat catatan singkat'});
+const completedRemote=await afterRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'});
+assert.equal(completedRemote.status,'completed');assert(completedRemote.result.length>0);assert(aiCalls.length>beforeRemote);
+const afterRemote=aiCalls.length;
+await assert.rejects(afterRestart.api('/api/chat',{chat_id:prepared.chatId,remoteJobId:remoteId,content:'Buat catatan singkat'}),/sudah dijalankan/);
+assert.equal(aiCalls.length,afterRemote);
+const syncRestart=await import('../frontend/test-build/desktop.mjs?sync-restart');
+assert.equal((await syncRestart.cloudReceipts([remoteId]))[0].result,completedRemote.result);
+const interruptedId='22222222-2222-4222-8222-222222222222';
+const interrupted=await syncRestart.api('/api/sync/prepare',{id:interruptedId,type:'chat',agent:'general'});
+failAI=true;await assert.rejects(syncRestart.api('/api/chat',{chat_id:interrupted.chatId,remoteJobId:interruptedId,content:'Another job'}));failAI=false;
+assert.equal((await syncRestart.api('/api/sync/prepare',{id:interruptedId,type:'chat',agent:'general'})).status,'running');
+assert.equal((await syncRestart.cloudReceipts([interruptedId])).length,0);
+const savedRemote=await syncRestart.exportBackup();failSave=true;
+await assert.rejects(syncRestart.api('/api/sync/prepare',{id:'33333333-3333-4333-8333-333333333333',type:'chat',agent:'general'}),/Disk/);failSave=false;
+assert.equal(await syncRestart.exportBackup(),savedRemote);
+const snapshot=await syncRestart.cloudSnapshot();assert(snapshot.employees.every(e=>!('instruction' in e)));assert(snapshot.messages.every(m=>!('attachments' in m)));assert(snapshot.projects.every(p=>!('notes' in p)));
+await syncRestart.api('/api/chats/delete',{id:prepared.chatId});
+await syncRestart.importBackup(await syncRestart.exportBackup());
+assert.equal((await syncRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'})).status,'completed');
+console.log('Passed: durable phone completion/restart, no repeated AI work, interrupted-job review, snapshot privacy and atomic receipt persistence.');

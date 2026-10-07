@@ -14,4 +14,7 @@ tests/*.exe
 __pycache__/
 *.key
 workspace.json*
+android-companion/build/
+android-companion/signing/
+sync-server/data/
 .env*

@@ -16,7 +16,7 @@ static DWORD WINAPI tools_worker(void *parameter){
  if(!WriteFile(inputW,job->payload,n,&written,NULL)||written!=n)goto done;CloseHandle(inputW);inputW=NULL;
  ULONGLONG deadline=GetTickCount64()+180000;
  for(;;){DWORD available=0;if(!PeekNamedPipe(outputR,NULL,0,NULL,&available,NULL)){if(GetLastError()==ERROR_BROKEN_PIPE)break;goto done;}
-  if(available){if(available>2000000-total)goto done;char *grown=realloc(response,(size_t)total+available+1);if(!grown)goto done;response=grown;DWORD received=0;if(!ReadFile(outputR,response+total,available,&received,NULL))goto done;total+=received;response[total]=0;}
+  if(available){if(available>6000000-total)goto done;char *grown=realloc(response,(size_t)total+available+1);if(!grown)goto done;response=grown;DWORD received=0;if(!ReadFile(outputR,response+total,available,&received,NULL))goto done;total+=received;response[total]=0;}
   else if(WaitForSingleObject(process.hProcess,0)==WAIT_OBJECT_0)break;
   else {if(GetTickCount64()>deadline)goto done;Sleep(20);}
  }

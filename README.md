@@ -1,6 +1,6 @@
 # DITASHA-WORKSHOP
 
-Local Windows AI workspace with a pixel office, animated employees, projects, notes, and chat history stored on your PC.
+Local Windows AI workspace with a 3D character office, animated employees, projects, notes, and chat history stored on your PC.
 
 Download `DITASHA-Workspace.exe` from [Releases](https://github.com/kaminarifoxu/DITASHA-WORKSHOP/releases/latest). Windows 10/11 x64 is required. No Node.js or Python is needed to run the app. First-time setup can install Microsoft's WebView2 Runtime.
 
@@ -118,3 +118,9 @@ Money emails go to **Achi · Pembayaran dari Lora** and `LocalAppData/DITASHA Wo
 Bills, receipt evidence, income and refunds are distinguished but stay pending review. Multiple different amounts stay blank, currencies stay separate, and no exchange rates are guessed. Review a source email in Achi, correct amount/currency/date, then confirm an actual transaction. **Catat di ledger** imports confirmed whole-Rupiah transactions with a deterministic source ID; retry after a partial status update never creates a second ledger row. Bills not yet paid remain in the review queue. There is no automatic payment, banking access or money transfer. Optional **Analisis AI Achi** sends the selected record to the employee's configured model for advice.
 
 Native tests cover read-only IMAP parsing, pagination and cursor resets, categories, amount ambiguity, account failures, deduplication, valid Excel package XML and formula-text safety. Windows CI also registers and removes an isolated real 20-minute scheduled task. Live Gmail sign-in and full desktop interaction still require account testing.
+
+## Phone sync (3.15.0)
+
+Windows can pair with your Debian VPS through outbound HTTPS. The Android companion and mobile website let you queue Amii tasks, view recent results, submit text/code files, download generated files and review Lora/Achi payment data. Your PC app runs the AI work while open. API keys and Gmail credentials stay on Windows.
+
+Download the Windows EXE, Android APK and server ZIP from Releases. See [Debian deployment and pairing instructions](sync-server/README.md). The default domain is `workspace.gremoryy.my.id`; other HTTPS origins are supported. The Android app is a personal preview for Android 8+, built and signature-checked in CI. VPS deployment and physical-device testing require your setup.
