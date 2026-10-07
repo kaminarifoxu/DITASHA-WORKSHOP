@@ -13,7 +13,7 @@ export function Person({index,working=false,walkingFrame=null,facing=1,className
 }
 export function Office({employees,onAdd,onChoose,onExpand,connected,busy,motion,compact=false,fit=false}:{employees:Employee[];onAdd:()=>void;onChoose:(id:string)=>void;onExpand?:()=>void;connected:boolean;busy:boolean;activeAgent?:string;motion:{board:OfficeEngine['board'];positions:OfficePositions;enabled:boolean;setEnabled:(value:boolean)=>void};compact?:boolean;fit?:boolean}){
  const layout=officeLayout(employees.length);
- const [dimension,setDimension]=useState<'3d'|'2d'>('3d'),[unavailable,setUnavailable]=useState(false);
+ const [dimension,setDimension]=useState<'3d'|'2d'>(compact?'2d':'3d'),[unavailable,setUnavailable]=useState(false);
  const fallback=useCallback(()=>{setUnavailable(true);setDimension('2d');},[]);
  const viewport=useRef<HTMLDivElement>(null),[scale,setScale]=useState(1);
  useEffect(()=>{
