@@ -15,7 +15,10 @@ function Save-Json($name,$value,$secret=$false){
 }
 function Read-SavedJson($path,$secret){
  $bytes=[IO.File]::ReadAllBytes($path);if($secret){$bytes=[Security.Cryptography.ProtectedData]::Unprotect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)}
- return @(ConvertFrom-Json -InputObject $utf.GetString($bytes))
+ # Windows PowerShell 5.1 emits a JSON array as one pipeline item.
+ # Enumerate the parsed value explicitly so each saved account stays separate.
+ $parsed=ConvertFrom-Json -InputObject $utf.GetString($bytes)
+ foreach($entry in $parsed){Write-Output $entry}
 }
 function Load-Json($name,$secret=$false){
  $path=Join-Path $Store $name;$backup=$path+'.bak'
@@ -27,7 +30,7 @@ function Load-Json($name,$secret=$false){
   [IO.File]::Copy($backup,$path,$true);return $recovered
  }
 }
-function Metadata($accounts){return @($accounts|ForEach-Object { @{id=$_.id;label=$_.label;email=$_.email;host=$_.host;port=993} })}
+function Metadata($accounts){foreach($account in $accounts){@{id=$account.id;label=$account.label;email=$account.email;host=$account.host;port=993}}}
 function Check-Root($root){
  $scan=[IO.Path]::GetFullPath($root.path);if(!(Test-Path -LiteralPath $scan -PathType Container)){throw 'Folder tidak ditemukan.'};while($scan){$item=Get-Item -LiteralPath $scan -Force;if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Link dan junction tidak diizinkan.'};$parent=[IO.Path]::GetDirectoryName($scan.TrimEnd([char[]]'\/'));if(!$parent -or $parent -eq $scan){break};$scan=$parent}
 }

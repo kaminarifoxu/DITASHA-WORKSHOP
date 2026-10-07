@@ -14,7 +14,7 @@ try{
  $scriptPath=Join-Path $Store 'assistant-tools.ps1';Copy-Item $sourcePath $scriptPath
  Copy-Item (Join-Path ([IO.Path]::GetDirectoryName($sourcePath)) 'mail-automation.ps1') (Join-Path $Store 'mail-automation.ps1')
  function Status { $result='{"action":"status"}' | & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $scriptPath -Store $Store;if($LASTEXITCODE -ne 0){throw 'Status process failed'};return ($result | ConvertFrom-Json) }
- $result=Status;Write-Host ('Fixture status: '+(ConvertTo-Json -InputObject @{ok=$result.ok;error=$result.error;count=@($result.data.accounts).Count;ids=@($result.data.accounts.id)} -Compress));Assert ($result.ok -and @($result.data.accounts).Count -eq 2) 'Both accounts load after restart'
+ $result=Status;Assert ($result.ok -and @($result.data.accounts).Count -eq 2) 'Both accounts load after restart'
  Assert (($result | ConvertTo-Json -Depth 12) -notmatch 'TEST-ONLY-SECRET|OTHER-TEST-SECRET|password') 'Status never exposes passwords'
  Copy-Item $sourcePath $scriptPath -Force;$result=Status
  Assert ($result.ok -and @($result.data.accounts).Count -eq 2) 'Updating installed script preserves saved accounts'
