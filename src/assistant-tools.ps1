@@ -127,7 +127,7 @@ try{
     if($request.kind -notin @('income','expense') -or [string]$request.currency -notmatch '^[A-Z]{3}$' -or $null -eq $request.amount -or [decimal]$request.amount -le 0 -or [decimal]$request.amount -gt 1000000000000 -or ([decimal]$request.amount*100)%1 -ne 0){throw 'Jumlah, mata uang atau jenis transaksi tidak valid.'}
     if($request.currency -eq 'IDR' -and ([decimal]$request.amount)%1 -ne 0){throw 'Jumlah IDR harus Rupiah utuh.'}
     $parsed=[DateTime]::MinValue;if(![DateTime]::TryParseExact([string]$request.date,'yyyy-MM-dd',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::None,[ref]$parsed)){throw 'Tanggal transaksi tidak valid.'}
-    $record.autoSorted=$false;$record.amount=[decimal]$request.amount;$record.currency=[string]$request.currency;$record.kind=$request.kind;$record.transactionDate=$request.date;$record.paymentType=if($request.kind -eq 'income'){'Pemasukan terkonfirmasi'}else{'Pengeluaran terkonfirmasi'};$record.reason='Dikonfirmasi pengguna untuk pencatatan. Tidak ada transfer uang.'
+    $record | Add-Member -NotePropertyName autoSorted -NotePropertyValue $false -Force;$record.amount=[decimal]$request.amount;$record.currency=[string]$request.currency;$record.kind=$request.kind;$record.transactionDate=$request.date;$record.paymentType=if($request.kind -eq 'income'){'Pemasukan terkonfirmasi'}else{'Pengeluaran terkonfirmasi'};$record.reason='Dikonfirmasi pengguna untuk pencatatan. Tidak ada transfer uang.'
    }
    if($request.review -in @('pending','excluded')){$record.autoSorted=$false};$record.review=$request.review;Mail-Save $state;try{$null=Mail-Export $state}catch{$state.exportError='Tutup laporan Excel lalu ekspor kembali.'};Mail-Save $state;$result=Mail-View $state
   }
