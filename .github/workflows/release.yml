@@ -146,6 +146,15 @@ jobs:
           name: phone-preview
           path: phone-preview/*.png
           retention-days: 7
+  email-persistence:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify encrypted email accounts across restart and update
+        shell: powershell
+        run: |
+          & .\tests\email-persistence.ps1 -Source .\src\assistant-tools.ps1
+          if (-not $?) { throw 'Email persistence tests failed' }
   windows-tests:
     needs: build
     runs-on: windows-latest
@@ -159,8 +168,6 @@ jobs:
         run: |
           & .\tests\mail-automation.ps1 -Source .\src\assistant-tools.ps1 -TestSchedule
           if (-not $?) { throw 'Mail automation tests failed' }
-          & .\tests\email-persistence.ps1 -Source .\src\assistant-tools.ps1
-          if (-not $?) { throw 'Email persistence tests failed' }
       - name: Verify Microsoft bootstrapper signature
         shell: pwsh
         run: |
@@ -189,7 +196,7 @@ jobs:
             Write-Warning 'Live trends feed unavailable on this runner; app reports an error and does not invent trends.'
           }
   release:
-    needs: [build, windows-tests, android, phone-ui]
+    needs: [build, windows-tests, android, phone-ui, email-persistence]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
