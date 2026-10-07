@@ -8,7 +8,7 @@
 #include "jsmn.h"
 #define BRIDGE_REPLY (WM_APP+44)
 static WCHAR data_root[MAX_PATH];
-static LONG ai_pending=0;
+#include "ai-slots.h"
 HANDLER(BridgeHandler, ICoreWebView2WebMessageReceivedEventHandler, IID_ICoreWebView2WebMessageReceivedEventHandler)
 
 typedef struct Reply { unsigned long id; BOOL ok; char *data; } Reply;
@@ -121,14 +121,17 @@ done:
     if(body){SecureZeroMemory(body,strlen(body));free(body);}free(response);
     if(job->authorization){SecureZeroMemory(job->authorization,wcslen(job->authorization)*sizeof(WCHAR));free(job->authorization);}
     if(job->messages){SecureZeroMemory(job->messages,strlen(job->messages));free(job->messages);}
-    InterlockedExchange(&ai_pending,0);
+    release_ai_slot();
     if(reply){
         if(!reply->ok){char data[512];snprintf(data,sizeof(data),"{\"error\":\"%s\"}",error);reply->data=_strdup(data);}
         if(!reply->data || !PostMessageW(job->window,BRIDGE_REPLY,0,(LPARAM)reply)){free(reply->data);free(reply);}
     }
     free(job);return 0;
 }
+#include "chatgpt.h"
+#include "api-providers.h"
 #include "trends.h"
+#include "assistant-tools.h"
 static BOOL updater_operation(App *app,const WCHAR *operation,unsigned long id,const WCHAR *payload);
 static HRESULT STDMETHODCALLTYPE bridge_invoke(ICoreWebView2WebMessageReceivedEventHandler *self,ICoreWebView2 *sender,ICoreWebView2WebMessageReceivedEventArgs *args) {
     (void)sender;App *app=((BridgeHandler*)self)->app;
@@ -150,6 +153,20 @@ static HRESULT STDMETHODCALLTYPE bridge_invoke(ICoreWebView2WebMessageReceivedEv
         char *data=to_utf8(line2);
         BOOL ok=data&&json_root(data,JSMN_OBJECT)&&write_local(L"workspace.json",data,(DWORD)strlen(data),TRUE);free(data);
         if(ok)send_reply(app,id,TRUE,"true");else fail_reply(app,id,"Data belum tersimpan. Periksa ruang disk dan akses folder aplikasi.");
+    }else if(!wcscmp(message,L"saveResult")) {
+        char *payload=to_utf8(line2);CgJson j=cg_json(payload);char *name=j.t?cg_get(&j,0,"name"):NULL,*content=j.t?cg_get(&j,0,"content"):NULL;
+        BOOL valid=name&&*name&&strlen(name)<=120&&content&&strlen(content)<=8000000;
+        if(name)for(const unsigned char *p=(const unsigned char*)name;*p;p++)if(*p<32||strchr("\\/:*?\"<>|",*p))valid=FALSE;
+        if(!valid)fail_reply(app,id,"Nama atau isi file tidak valid.");
+        else {WCHAR path[32768]={0},*wide=to_wide(name);if(wide){wcsncpy(path,wide,32767);free(wide);}OPENFILENAMEW ofn={0};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=app->window;ofn.lpstrFile=path;ofn.nMaxFile=32768;ofn.lpstrTitle=L"Simpan hasil AI";ofn.lpstrFilter=L"Semua file\0*.*\0\0";ofn.Flags=OFN_OVERWRITEPROMPT|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
+         if(GetSaveFileNameW(&ofn)){HANDLE file=CreateFileW(path,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);DWORD written=0,n=(DWORD)strlen(content);BOOL ok=file!=INVALID_HANDLE_VALUE&&WriteFile(file,content,n,&written,NULL)&&written==n;if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);if(ok)send_reply(app,id,TRUE,"{\"saved\":true}");else fail_reply(app,id,"File belum tersimpan. Periksa izin folder dan ruang disk.");}
+         else if(CommDlgExtendedError())fail_reply(app,id,"Dialog simpan tidak dapat dibuka.");else send_reply(app,id,TRUE,"{\"saved\":false}");
+        }free(name);cg_clear(content);free(j.t);cg_clear(payload);
+    }else if(!wcscmp(message,L"openLink")) {
+        BOOL valid=(!wcsncmp(line2,L"https://",8)||!wcsncmp(line2,L"http://",7))&&wcslen(line2)<2048;for(const WCHAR *p=line2;*p;p++)if(*p<=32||*p==L'"'||*p==L'\\')valid=FALSE;
+        if(valid&&(INT_PTR)ShellExecuteW(app->window,L"open",line2,NULL,NULL,SW_SHOWNORMAL)>32)send_reply(app,id,TRUE,"true");else fail_reply(app,id,"Tautan tidak dapat dibuka.");
+    }else if(tools_operation(app,message,id,line2)) {
+        /* Folder selection and read-only IMAP tools. */
     }else if(!wcscmp(message,L"hasKey")) {
         char *key=load_key();send_reply(app,id,TRUE,key?"true":"false");if(key){SecureZeroMemory(key,strlen(key));free(key);}
     }else if(!wcscmp(message,L"saveKey")) {
@@ -158,19 +175,25 @@ static HRESULT STDMETHODCALLTYPE bridge_invoke(ICoreWebView2WebMessageReceivedEv
     }else if(!wcscmp(message,L"removeKey")) {
         WCHAR path[MAX_PATH];local_path(L"openrouter.key",path);
         if(DeleteFileW(path)||GetLastError()==ERROR_FILE_NOT_FOUND)send_reply(app,id,TRUE,"true");else fail_reply(app,id,"API key tidak dapat dihapus.");
+    }else if(api_operation(app,message,id,line2)) {
+        /* Provider keys and per-employee inference. */
+    }else if(cg_operation(app,message,id,line2)) {
+        /* Native OAuth and account operations reply asynchronously. */
     }else if(!wcscmp(message,L"trends")) {
         start_trends(app,id);
     }else if(!wcscmp(message,L"ai")||!wcscmp(message,L"aiCoding")) {
-        if(InterlockedCompareExchange(&ai_pending,1,0)!=0){fail_reply(app,id,"AI masih menjawab. Tunggu sampai selesai.");goto finish;}
+        if(cg_using()){cg_start(app,id,"chatgptAI",line2,!wcscmp(message,L"aiCoding"));goto finish;}
+        if(InterlockedCompareExchange(&cg_control,0,0)){fail_reply(app,id,"Tunggu pengaturan koneksi selesai.");goto finish;}
+        if(!reserve_ai_slot()){fail_reply(app,id,"Tiga permintaan AI sedang berjalan. Tunggu sebentar.");goto finish;}
         AiJob *job=calloc(1,sizeof(AiJob));char *key=load_key();
-        if(!job||!key){free(job);if(key){SecureZeroMemory(key,strlen(key));free(key);}InterlockedExchange(&ai_pending,0);fail_reply(app,id,"Masukkan API key OpenRouter di Pengaturan.");goto finish;}
+        if(!job||!key){free(job);if(key){SecureZeroMemory(key,strlen(key));free(key);}release_ai_slot();fail_reply(app,id,"Masukkan API key OpenRouter di Pengaturan.");goto finish;}
         job->window=app->window;job->id=id;job->coding=!wcscmp(message,L"aiCoding");job->messages=to_utf8(line2);
         size_t n=strlen(key)+32;char *auth=malloc(n);if(auth)snprintf(auth,n,"Authorization: Bearer %s\r\n",key);
         job->authorization=auth?to_wide(auth):NULL;
         if(auth){SecureZeroMemory(auth,strlen(auth));free(auth);}SecureZeroMemory(key,strlen(key));free(key);
         HANDLE thread=NULL;
         if(job->messages&&strlen(job->messages)<500000&&json_root(job->messages,JSMN_ARRAY)&&job->authorization)thread=CreateThread(NULL,0,ai_worker,job,0,NULL);
-        if(thread)CloseHandle(thread);else {free(job->messages);if(job->authorization){SecureZeroMemory(job->authorization,wcslen(job->authorization)*sizeof(WCHAR));free(job->authorization);}free(job);InterlockedExchange(&ai_pending,0);fail_reply(app,id,"Permintaan tidak dapat diproses. Coba lagi.");}
+        if(thread)CloseHandle(thread);else {free(job->messages);if(job->authorization){SecureZeroMemory(job->authorization,wcslen(job->authorization)*sizeof(WCHAR));free(job->authorization);}free(job);release_ai_slot();fail_reply(app,id,"Permintaan tidak dapat diproses. Coba lagi.");}
     }else if(!updater_operation(app,message,id,line2))fail_reply(app,id,"Operasi tidak dikenal.");
 finish:
     SecureZeroMemory(line2,wcslen(line2)*sizeof(WCHAR));CoTaskMemFree(message);return S_OK;

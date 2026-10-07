@@ -34,3 +34,5 @@ END
 102 RCDATA "../vendor/MicrosoftEdgeWebview2Setup.exe"
 
 103 RCDATA "index.html"
+
+104 RCDATA "../src/assistant-tools.ps1"

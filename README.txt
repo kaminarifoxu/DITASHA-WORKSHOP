@@ -62,3 +62,25 @@ Use Workspace > Check and download updates for a manual check or Pengaturan > Up
 PUBLISHING YOUR NEXT VERSION
 Run python3 scripts/set-version.py 3.2.0 (choose a newer version), commit your code changes, and push to main. GitHub Actions builds the app, runs Linux and Windows updater tests, then creates a versioned release with EXE, SHA-256 file and source archive. An existing version is never overwritten: bump the version for each release.
 Source checkout builds also need python3 scripts/fetch-vendor.py before compiling, to obtain the pinned Microsoft SDK components and bootstrapper.
+
+ChatGPT plan (3.8.0):
+Open Pengaturan > Continue with ChatGPT. Complete browser sign-in and usage consent. Eligible accounts can share their ChatGPT plan allowance with Amii and the team. Model availability is returned by OpenAI for that account. Choose general/coding models in Settings. Manage usage opens ChatGPT settings, where you can disable extra-credit use. No automatic provider fallback. Credentials use Windows encryption and are excluded from backups. Real sign-in and account eligibility must be tested on your Windows PC.
+
+Provider and employee settings (3.9.0):
+Fixes the ChatGPT login host identifier automatically. Settings now supports OpenRouter, Groq, Gemini, OpenAI API and custom HTTPS compatible endpoints. Select each employee provider/model under AI untuk setiap karyawan, then save. Keys are encrypted and excluded from backups. OpenRouter defaults to free-only mode. API charges are separate from a ChatGPT subscription. Live login/API access requires Windows testing.
+
+3.9.1: Fixes ChatGPT response parsing and adds specific usage/session/token-limit/connection error messages. Retry your task after opening the updated EXE.
+
+3.10.0: Improved chat layout and Markdown formatting. Delete one/all chats with confirmation. Attach up to 5 UTF-8 text/code files. Save AI code files or the full Markdown answer using a Windows Save dialog. PDF, images, Office documents and binary assets are not supported.
+
+3.12.1: Adds a recommended OpenRouter team preset, six suggested model options, improved built-in employee prompts and visible work instructions. Applies the preset once when an OpenRouter key is already saved. Custom employee model choices remain unchanged.
+
+
+Version 3.12.1: operational employees
+- Achi: white-haired character; manual IDR income/expense ledger, monthly budgets, CSV export, and AI review using recorded totals. Ledger is part of workspace backups. No bank connection or transfers.
+- Lora: brown-haired character; up to 20 Gmail/IMAP accounts using provider app passwords, TLS 1.2 on port 993 and server certificate validation. Tests connection before saving. Credentials use Windows CurrentUser DPAPI and stay out of workspace backups. Manual inbox checks fetch 20 latest headers, unread counts, and selected text MIME previews; EXAMINE and BODY.PEEK preserve unread status. AI drafts never send mail. Chat inbox-check requests read metadata from configured accounts. OAuth-only accounts are not supported.
+- Dante: black-haired character with glasses and brown jacket; user-selected allowed folders, bounded recursive inventory, UTF-8 text previews, and reviewed rename/move operations inside a selected folder. Rejects path traversal, junction/symlink access and existing destinations. No delete, overwrite or execution. Chat file requests can read allowed inventories; changes remain user-operated. Folder grants are PC-specific and excluded from workspace backups.
+- All three have distinct idle/walk/work vector sprites, roles, model selections, task-board handoffs and reporting through Amii. New roles inherit Amii’s saved model choice on first launch.
+- Tools require Windows PowerShell 5.1, included with Windows 10/11. Desktop compilation, adapter/ledger tests, PowerShell parser/MIME tests and isolated real file-operation tests pass. Actual Gmail authentication, DPAPI and full Windows UI require checking on the user PC.
+
+Version 3.12.1: all ten employees now use one consistent chibi vector character system in office, chat, team cards, and the avatar picker. Hair, clothing, glasses and accessories preserve each identity. Shared head/body proportions stay fixed across idle, walk and work; walking alternates legs/arms and working adds a tablet. Previous raster sprite atlases are no longer used by the frontend.

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include "../src/ai-slots.h"
 static BOOL fail_install=FALSE;
 static BOOL test_move(LPCWSTR from,LPCWSTR to,DWORD flags){
     size_t length=wcslen(from);if(fail_install&&length>4&&!wcscmp(from+length-4,L".new")){SetLastError(ERROR_ACCESS_DENIED);return FALSE;}
@@ -16,6 +17,10 @@ static BOOL test_move(LPCWSTR from,LPCWSTR to,DWORD flags){
 static void write_text(const WCHAR *path,const char *value){HANDLE f=CreateFileW(path,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,0,NULL);assert(f!=INVALID_HANDLE_VALUE);DWORD n=0;assert(WriteFile(f,value,(DWORD)strlen(value),&n,NULL)&&n==strlen(value));CloseHandle(f);}
 static void expect_text(const WCHAR *path,const char *expected){char bytes[64]={0};HANDLE f=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);assert(f!=INVALID_HANDLE_VALUE);DWORD n=0;assert(ReadFile(f,bytes,63,&n,NULL));CloseHandle(f);assert(!strcmp(bytes,expected));}
 int main(int argc,char **argv){
+ assert(reserve_ai_slot());assert(reserve_ai_slot());assert(reserve_ai_slot());assert(!reserve_ai_slot());
+ release_ai_slot();assert(ai_pending==2);assert(reserve_ai_slot());
+ release_ai_slot();release_ai_slot();assert(ai_pending==1);release_ai_slot();assert(ai_pending==0);
+ puts("Passed native AI slots: three concurrent workers, overflow rejection, independent completion and updater idle state.");
  WCHAR temp[MAX_PATH],folder[MAX_PATH],source[MAX_PATH],target[MAX_PATH],backup[MAX_PATH],missing[MAX_PATH],scratch[MAX_PATH];
  assert(GetTempPathW(MAX_PATH,temp));assert(GetTempFileNameW(temp,L"DIT",0,folder));assert(DeleteFileW(folder));assert(CreateDirectoryW(folder,NULL));
  swprintf(source,MAX_PATH,L"%ls\\candidate.exe",folder);swprintf(target,MAX_PATH,L"%ls\\target.exe",folder);swprintf(backup,MAX_PATH,L"%ls.previous",target);swprintf(missing,MAX_PATH,L"%ls\\missing.exe",folder);swprintf(scratch,MAX_PATH,L"%ls.new",target);

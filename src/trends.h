@@ -27,14 +27,14 @@ static DWORD WINAPI trend_worker(void *context) {
     snprintf(reply->data,n,"{\"rss\":%s,\"source\":\"https://trends.google.com/trending/rss?geo=ID\"}",quoted);reply->ok=TRUE;
 done:
     if(request)WinHttpCloseHandle(request);if(connection)WinHttpCloseHandle(connection);if(session)WinHttpCloseHandle(session);free(rss);free(quoted);
-    InterlockedExchange(&ai_pending,0);
+    release_ai_slot();
     if(reply){if(!reply->ok){free(reply->data);char data[512];snprintf(data,sizeof(data),"{\"error\":\"%s\"}",error);reply->data=_strdup(data);}
         if(!reply->data||!PostMessageW(job->window,BRIDGE_REPLY,0,(LPARAM)reply)){free(reply->data);free(reply);}}
     free(job);return 0;
 }
 static void start_trends(App *app,unsigned long id) {
-    if(InterlockedCompareExchange(&ai_pending,1,0)!=0){fail_reply(app,id,"Tunggu permintaan yang sedang berjalan selesai.");return;}
+    if(!reserve_ai_slot()){fail_reply(app,id,"Tunggu permintaan yang sedang berjalan selesai.");return;}
     TrendJob *job=calloc(1,sizeof(TrendJob));if(job){job->window=app->window;job->id=id;}
     HANDLE thread=job?CreateThread(NULL,0,trend_worker,job,0,NULL):NULL;
-    if(thread)CloseHandle(thread);else{free(job);InterlockedExchange(&ai_pending,0);fail_reply(app,id,"Pencarian tren tidak dapat dimulai.");}
+    if(thread)CloseHandle(thread);else{free(job);release_ai_slot();fail_reply(app,id,"Pencarian tren tidak dapat dimulai.");}
 }

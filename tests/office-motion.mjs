@@ -26,10 +26,14 @@ console.log('Passed: 18 employees in one expanding office, unique desks, connect
 
 const boardOffice=new OfficeEngine();boardOffice.sync(['general','social','designer','web']);
 const visited=new Set();const posting=boardOffice.postPlan([{employee_id:'social',brief:'Research'},{employee_id:'designer',brief:'Design'},{employee_id:'web',brief:'Code'}]);
-let posted=false;posting.then(()=>posted=true);
-for(let i=0;i<2500&&!posted;i++){boardOffice.tick(.05);const state=boardOffice.snapshot();if(state.general.phase==='assigning')visited.add('amii');for(const id of ['social','designer','web'])if(state[id].phase==='receiving')visited.add(id);await Promise.resolve();}
-assert(posted);await posting;assert.deepEqual([...visited].sort(),['amii','designer','social','web']);
-assert.equal(boardOffice.actors.general.node,boardOffice.actors.general.desk);
-for(const id of ['social','designer','web']){assert.equal(boardOffice.actors[id].node,boardOffice.actors[id].desk);assert.equal(boardOffice.actors[id].phase,'queued');}
+async function finishBoard(job){let done=false;job.then(()=>done=true);for(let i=0;i<2500&&!done;i++){boardOffice.tick(.05);const state=boardOffice.snapshot();if(state.general.phase==='assigning')visited.add('amii');for(const id of ['social','designer','web'])if(state[id].phase==='receiving')visited.add(id);await Promise.resolve();}assert(done);await job;}
+await finishBoard(posting);assert.equal(boardOffice.actors.general.node,boardOffice.actors.general.desk);assert(!visited.has('designer'),'designer does not collect before research');
+await finishBoard(boardOffice.assign('social'));assert(visited.has('social'));assert.equal(boardOffice.actors.social.phase,'working');
+await finishBoard(boardOffice.publishResult('social'));assert.equal(boardOffice.board[0].status,'done');assert.equal(boardOffice.actors.social.node,boardOffice.actors.social.desk);
+await finishBoard(Promise.all(['designer','web'].map(id=>boardOffice.assign(id))));assert(visited.has('designer')&&visited.has('web'));for(const id of ['designer','web'])assert.equal(boardOffice.actors[id].phase,'working');
+boardOffice.ready('designer');boardOffice.ready('web');assert.equal(boardOffice.actors.designer.node,boardOffice.actors.designer.desk,'finished designer waits at desk');
+await finishBoard(boardOffice.reportTogether(['designer','web']));for(const id of ['designer','web'])assert.equal(boardOffice.actors[id].node,boardOffice.actors.general.desk);assert.notEqual(boardOffice.actors.designer.point.x,boardOffice.actors.web.point.x);
+await boardOffice.postPlan([]);
+await finishBoard(boardOffice.postPlan([{employee_id:'social',brief:'Research'},{employee_id:'designer',brief:'Design'},{employee_id:'web',brief:'Code'}]));
 boardOffice.setEnabled(false);await boardOffice.assign('social');assert.equal(boardOffice.board[0].status,'working');await boardOffice.report('social');assert.equal(boardOffice.board[0].status,'done');boardOffice.fail();assert.deepEqual(boardOffice.board.map(t=>t.status),['done','failed','failed']);
 console.log('Passed: Amii board posting, all team members collect work, queued desks, board progress and failure state.');

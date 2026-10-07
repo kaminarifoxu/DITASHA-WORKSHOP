@@ -13,8 +13,8 @@ export function resolveTeamPlan(raw:unknown,text:string,team:Employee[]):TeamSte
  const repair=/\b(fix|debug|error|perbaiki|rusak)\b/i.test(text);
  if(website&&build&&!repair)return [
   {employee_id:'social',brief:'Research audience fit and content/market direction for this website. Use supplied live Google search trends only when relevant. Suggest design directions as your recommendations, not as verified design popularity. Original request: '+text},
-  {employee_id:'designer',brief:'Develop the landing-page visual design: layout, hierarchy, palette, typography, responsive behavior and components. Use Mika’s research and the original constraints. Original request: '+text},
-  {employee_id:'web',brief:'Deliver complete usable landing-page code and setup instructions based on Luna’s design and Mika’s research. Preserve the original requirements. Original request: '+text}
+  {employee_id:'designer',brief:'Develop the landing-page visual design: layout, hierarchy, palette, typography, responsive behavior and components. Use Mika’s research and the shared brief; you work alongside Sora. Original request: '+text},
+  {employee_id:'web',brief:'Deliver complete usable landing-page code and setup instructions based on Mika’s research and the shared brief. Create an initial implementation alongside Luna; a final integration pass will apply her design. Preserve the original requirements. Original request: '+text}
  ];
  if(p.steps!==undefined){
   if(!Array.isArray(p.steps)||p.steps.length<1||p.steps.length>6||!p.steps.every(valid)||new Set(p.steps.map(s=>s.employee_id)).size!==p.steps.length||(p.steps.length>1&&p.steps.some(s=>s.employee_id==='general')))throw new Error('Rencana kerja tim Amii tidak valid. Coba lagi.');

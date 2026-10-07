@@ -46,11 +46,16 @@ jobs:
           ./tests/update-core
           gcc -Wall -Wextra -Werror -Ivendor tests/json-validation.c -o tests/json-validation
           ./tests/json-validation
+          gcc -Wall -Wextra -Werror -Wno-misleading-indentation -fsanitize=address,undefined -Ivendor tests/chatgpt-core.c -o tests/chatgpt-core
+          ./tests/chatgpt-core
+          gcc -Wall -Wextra -Werror -Wno-misleading-indentation -fsanitize=address,undefined -Ivendor tests/api-provider-core.c -o tests/api-provider-core
+          ./tests/api-provider-core
       - name: Build Windows application and Windows tests
         run: |
           python3 pack-frontend.py
           bash build.sh
           x86_64-w64-mingw32-gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-windows.c -o tests/update-windows.exe -ladvapi32
+          x86_64-w64-mingw32-gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unknown-pragmas -isystem vendor tests/chatgpt-windows.c -municode -o tests/chatgpt-windows.exe -lole32 -lshell32 -luser32 -lgdi32 -lwinhttp -lcrypt32 -lbcrypt -lws2_32 -lcomdlg32
           sha256sum DITASHA-Workspace.exe > DITASHA-Workspace.exe.sha256
       - name: Store Windows test package
         uses: actions/upload-artifact@v4
@@ -59,6 +64,7 @@ jobs:
           path: |
             DITASHA-Workspace.exe
             tests/update-windows.exe
+            tests/chatgpt-windows.exe
             vendor/MicrosoftEdgeWebview2Setup.exe
           retention-days: 7
       - name: Store release executable
@@ -86,6 +92,11 @@ jobs:
         run: |
           & .\tests\update-windows.exe .\DITASHA-Workspace.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows updater tests failed' }
+      - name: Test ChatGPT crypto and storage on Windows
+        shell: pwsh
+        run: |
+          & .\tests\chatgpt-windows.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows ChatGPT tests failed' }
       - name: Check live public Google Trends feed
         shell: pwsh
         run: |
@@ -122,7 +133,17 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Amii walks to the shared task board to post work. Assigned employees collect their briefs, work at their own desks and carry completed results back to Amii. The board displays team progress. Website creation coordinates Mika’s audience/market research, Luna’s visual design and Sora’s code, passing earlier contributions to the next specialist. Live Google Trends failures fall back to clearly labeled general recommendations for team projects. Local projects, chats and settings are preserved. Includes distinct characters, animated walking and verified updates.
+          Remakes all ten employees in one consistent chibi style with fixed proportions and shared idle, walking and working animations. Adds Achi for IDR income/expenses/budgets, Lora for multiple Gmail/IMAP inboxes and reply drafts, and Dante for selected-folder inventories, text previews and reviewed rename/move actions. Email credentials stay encrypted on the PC; no automatic email sending, file deletion or overwriting.
+
+          Adds a one-time recommended free OpenRouter team preset, improved built-in role prompts, visible employee instructions and alternative model IDs. Gemma powers general roles and North Mini Code powers FiveM/web roles with at least 8192 output tokens. Custom employee assignments are preserved. Live model availability and quotas require account testing.
+
+          Improves chat layout, renders safe Markdown, adds confirmed single/all chat deletion, text/code attachments and generated file download cards using a Windows Save dialog. Attachments are preserved in chat history/backups and sent to assigned providers. Binary files, PDF and images are not supported.
+
+          Fixes ChatGPT response parsing for standard SSE formatting and completed JSON replies. Adds specific usage/session/token-limit/connection errors and displays completed refusal text. Incomplete jobs are rejected without automatic retries.
+
+          Fixes ChatGPT sign-in by migrating the PC identifier to a stable UUID v4 URN. Adds OpenRouter, Groq, Gemini, OpenAI API and custom HTTPS compatible endpoints, encrypted provider keys, model catalogs/manual model IDs, and provider/model choices for every employee. OpenRouter defaults to free-only mode; API billing is separate from a ChatGPT subscription. Live account login and API access require Windows testing.
+
+          Mika posts research at the task board, then Luna and Sora work concurrently. Sora integrates Luna's completed design before both report to Amii. The native worker pool supports up to three simultaneous requests across providers and preserves updater restart protection. Local backup data includes model assignments and excludes credentials.
 
           The app checks for new stable releases and can download verified updates automatically. Choose Restart to install when ready. Local data stays in LocalAppData.
 

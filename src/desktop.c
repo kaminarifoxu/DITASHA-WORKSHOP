@@ -4,7 +4,9 @@
 #define _UNICODE
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
 #include <windows.h>
+#include <commdlg.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <wchar.h>
