@@ -68,7 +68,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
     const chosen=team.find(e=>e.id===plan?.employee_id);
     if(!chosen||typeof plan.brief!=='string'||!plan.brief.trim()||plan.brief.length>16000)throw new Error('Pembagian tugas Amii tidak valid. Coba lagi.');
     employee=chosen;brief=plan.brief;
-    if(employee.id!=='general')await body.onAssign?.(employee.id);
+    await body.onAssign?.(employee.id);
    }
    const project=next.projects.find(p=>p.id===chat.project_id);
    const history=next.messages.filter(m=>m.chat_id===chat.id).sort((a,b)=>a.created-b.created).slice(-16);
@@ -76,7 +76,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
    const result=await native(isCodingEmployee(employee)?'aiCoding':'ai',JSON.stringify([{role:'system',content:context},...history.map(m=>({role:m.role,content:m.content})),{role:'user',content:brief===text?text:JSON.stringify({original_request:text,task_from_Amii:brief})}]));
    const answer=result?.choices?.[0]?.message?.content;
    if(typeof answer!=='string'||!answer.trim())throw new Error('AI belum memberikan jawaban. Coba lagi.');
-   if(employee.id!=='general')await body.onReport?.(employee.id);
+   await body.onReport?.(employee.id);
    const delivered=employee.id!=='general'?'Amii · Hasil dari '+employee.name+'\n\n'+answer:answer;
    const messages:Message[]=[{id:crypto.randomUUID(),chat_id:chat.id,role:'user',content:text,created:now},{id:crypto.randomUUID(),chat_id:chat.id,role:'assistant',content:delivered,created:now+1}];
    next.messages.push(...messages);chat.updated=now;chat.title=history.length?chat.title:text.slice(0,60);

@@ -12,6 +12,6 @@ await finish(engine.report('developer'));assert.equal(engine.actors.developer.no
 engine.reset();for(let i=0;i<40;i++)engine.tick(.05);assert.notDeepEqual(engine.snapshot().developer.point,taskStart);
 await finish(engine.assign('extra'));assert.equal(engine.actors.extra.phase,'working');
 engine.reset();engine.setEnabled(false);await engine.assign('developer');await engine.report('developer');assert.equal(engine.actors.developer.node,engine.actors.general.desk);
-engine.reset();const stopped=engine.snapshot();for(let i=0;i<100;i++)engine.tick(.05);assert.deepEqual(engine.snapshot(),stopped);
+engine.reset();await engine.assign('general');assert.equal(engine.actors.general.phase,'working');engine.reset();const stopped=engine.snapshot();for(let i=0;i<100;i++)engine.tick(.05);assert.deepEqual(engine.snapshot(),stopped);
 engine.setEnabled(true);const pending=engine.assign('developer');engine.setEnabled(false);await pending;assert.equal(engine.actors.developer.phase,'working');engine.reset();
 console.log('Passed: idle roaming, Amii assignment, desk work, report to Amii, custom rooms, movement toggle and toggle during handoff.');

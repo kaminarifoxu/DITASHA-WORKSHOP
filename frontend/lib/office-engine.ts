@@ -11,8 +11,8 @@ export class OfficeEngine {
   else if(a.phase==='idle'&&this.enabled){a.pause-=seconds;if(a.pause<=0){const choices=idleNodes.filter(n=>n!==a.node);a.path=route(a.node,choices[Math.floor(Math.random()*choices.length)]);a.phase='walking';}}
  }}
  async go(id:string,target:number,phase:Phase){const a=this.actors[id];if(!a)return;a.phase=phase;const anchor=a.path[0]??a.node;a.path=[...(a.path.length?[anchor]:[]),...route(anchor,target)];if(!this.enabled){a.path=[];a.node=target;a.point={...nodes[target]};return;}if(a.path.length)await new Promise<void>(resolve=>{const timeout=setTimeout(()=>{const end=a.path[a.path.length-1];if(end!==undefined){a.node=end;a.point={...nodes[end]};}a.path=[];a.arrival=undefined;resolve();},15000);a.arrival=()=>{clearTimeout(timeout);resolve();};});}
- async assign(worker:string){const ami=this.actors.general,w=this.actors[worker];if(!ami||!w)return;w.phase='receiving';await this.go('general',w.desk,'assigning');await this.go(worker,w.desk,'returning');w.phase='working';await this.go('general',ami.desk,'returning');ami.phase='receiving';}
- async report(worker:string){const ami=this.actors.general,w=this.actors[worker];if(!ami||!w)return;await this.go(worker,ami.desk,'reporting');w.phase='receiving';}
+ async assign(worker:string){const ami=this.actors.general,w=this.actors[worker];if(!ami||!w)return;if(worker==='general'){await this.go(worker,w.desk,'returning');w.phase='working';return;}w.phase='receiving';await this.go('general',w.desk,'assigning');ami.point.x+=7;await this.go(worker,w.desk,'returning');w.phase='working';await this.go('general',ami.desk,'returning');ami.phase='receiving';}
+ async report(worker:string){const ami=this.actors.general,w=this.actors[worker];if(!ami||!w)return;await this.go(worker,ami.desk,'reporting');if(worker!=='general')w.point.x+=7;w.phase='receiving';}
  reset(){for(const a of Object.values(this.actors)){a.arrival?.();a.arrival=undefined;a.phase='idle';a.pause=.6;}}
 }
 export const officeEngine=new OfficeEngine();
