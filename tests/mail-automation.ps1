@@ -16,6 +16,11 @@ $p=Mail-Finance 'Not paid. Invoice USD 19.95';Assert ($p.amount -eq 19.95 -and $
 $p=Mail-Finance 'Receipt subtotal Rp 100.000 tax Rp 11.000 total Rp 111.000';Assert ($null -eq $p.amount) 'Multiple amounts are ambiguous'
 $p=Mail-Finance 'Payment Rp 1,50';Assert ($null -eq $p.amount) 'Non-integral/ambiguous IDR amount left blank'
 $p=Mail-Finance 'Refund USD 9.50';Assert ($p.kind -eq 'income' -and $p.paymentType -eq 'Pengembalian') 'Refund is separate from spending'
+# Realistic subject regressions: advertisements and account notices are not payments.
+foreach($sample in @(@('Set the mood with 2 free months of Premium','Then USD 12.99 per month. Subscription and payment terms apply.','Promosi'),@('Penyimpanan iCloud Anda penuh','Upgrade Rp 15.000 per month','Layanan akun'),@('Tetap log in pada perangkat terpercaya ini','PayPal balance USD 5','Keamanan'),@('Silakan aktifkan rekening Anda','Saldo Rp 100.000','Layanan akun'),@('Mulai bisnis Anda dengan PayPal','Accept payments USD 5','Promosi'),@('Ini total pengeluaranmu di Januari','Total pengeluaran Rp 21.000','Laporan keuangan'),@('Info Transaksi Masuk ke blu Kamu','Dana masuk Rp 25.000','Keuangan'),@('You paid to Developed Methods LLC for invoice 4323','Amount USD 5.00. Future invoices are due next month.','Keuangan'),@('Shop0209','You paid USD 5.00 to Shop0209. Transaction ID 123','Keuangan'))){Assert ((Mail-Category $sample[0] 'service@example.test' $sample[1]) -eq $sample[2]) ('Purpose-aware category: '+$sample[0])}
+$p=Mail-Finance 'Amount USD 5.00. Future invoice amount due next month.' 'You paid to Developed Methods LLC for invoice 4323';Assert ($p.paymentType -eq 'Bukti pembayaran') 'Explicit paid subject beats invoice footer'
+$p=Mail-Finance 'Subscription USD 5.00' 'Discord payment failed';Assert ($p.paymentType -eq 'Pembayaran gagal') 'Failure is never a completed receipt'
+$p=Mail-Finance 'Rp 25.000' 'Info Transaksi Masuk ke blu Kamu';Assert ($p.paymentType -eq 'Pemasukan' -and $p.kind -eq 'income') 'Bank incoming transaction is income'
 $a=@{id='first';email='one@example.test'};$b=@{id='second';email='two@example.test'};$message=@{uid='1';messageId='<same@example.test>';subject='Receipt';from='bank@example.test';date='Wed, 07 Oct 2026 10:00:00 +0700';content='Payment successful Rp 125.000'}
 $one=Mail-Record $a '100' $message;$two=Mail-Record $b '200' $message;Assert ($one.id -eq $two.id) 'Message-ID dedupes copied mail across accounts'
 $message.messageId='';$one=Mail-Record $a '100' $message;$two=Mail-Record $a '200' $message;Assert ($one.id -ne $two.id) 'UIDVALIDITY reset does not collide with old UIDs'
@@ -44,6 +49,16 @@ try{
  function Mail-TaskInfo {return @{registered=$false;nextRun='';lastResult=$null}}
  function Load-Json {return @()}
  function Mail-Save($state){$script:saved=ConvertTo-Json -InputObject $state -Depth 12 -Compress}
+ $ad=Mail-Record @{id='a';email='a@example.test'} '1' @{uid='1';messageId='ad';subject='Set the mood with 2 free months of Premium';from='music@example.test';date='2026-10-07';content='USD 12.99 per month. Payment terms.'}
+ $ad.category='Keuangan';$ad.review='pending';$ad | Add-Member -NotePropertyName classificationVersion -NotePropertyValue 1 -Force
+ $paid=Mail-Record @{id='a';email='a@example.test'} '1' @{uid='2';messageId='paid';subject='You paid to Merchant for invoice 1';from='payments@example.test';date='2026-10-07';content='Payment successful Rp 125.000'}
+ $reviewed=$paid.PSObject.Copy();$reviewed.id='reviewed';$reviewed.review='recorded';$reviewed.ledgerId='ledger-1';$reviewed | Add-Member -NotePropertyName classificationVersion -NotePropertyValue 1 -Force
+ $script:archive=[pscustomobject]@{enabled=$false;lastRun='';lastError='';exportError='';nextAccount=0;cursors=@();records=@($ad,$paid,$reviewed);accounts=@()}
+ function Load-Json {return $script:archive}
+ $migrated=Mail-State;Assert ($migrated.records[0].category -eq 'Promosi' -and !$migrated.records[0].review) 'Old false payment automatically reclassified'
+ Assert ($migrated.records[2].review -eq 'recorded' -and $migrated.records[2].ledgerId -eq 'ledger-1') 'Reclassification preserves reviewed/recorded decisions'
+ $context=Mail-FinanceContext $migrated;Assert ($context.total -eq 2 -and $context.pending -eq 1 -and $context.payments[0].subject -notmatch 'free months') 'AI evidence contains receipts, excludes advertisement and separates recorded count'
+ function Load-Json {return @()}
  $state=Mail-State;$message.messageId='<same@example.test>'
  function Email($account,$action,$cursor){if($account.id -eq 'broken'){throw 'Connection failed'};return @{validity='42';lastUid='1';remaining=0;messages=@($message)}}
  $result=Mail-Scan $state @($a,@{id='broken';email='broken@example.test'},$b)

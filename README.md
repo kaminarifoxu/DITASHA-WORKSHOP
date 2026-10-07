@@ -136,3 +136,7 @@ Chat with Amii directly beside the office floor, using the same saved conversati
 ## 3D office and persistent email accounts (3.17.0)
 
 The Sakura office now renders real 3D furniture, tatami, shoji windows, plants, board and moving employee models in one scene. The 3D/2D switch keeps the original view available and falls back automatically when WebGL is unavailable. Chat remains beside the room. Saved email accounts are shown above the add-account form and reloaded from the same encrypted Windows-user data folder after an update. A current encrypted recovery copy protects the account vault. Blank password fields never expose saved credentials. Release checks verify the EXE contains the exact built frontend and exercise email restart/update/recovery on Windows.
+
+## Payment triage and Achi evidence (3.18.0)
+
+Lora classifies the main purpose of emails instead of treating every price or bank mention as a payment. Promotions, login/account notices and monthly summaries stay outside the payment queue. Explicit paid receipts, incoming transfers, failed payments and unpaid invoices have distinct labels. Old unreviewed records are reclassified locally; manually confirmed, excluded and recorded entries remain unchanged. Achi analysis receives saved payment-email evidence alongside the recorded ledger, with separate counts and an explicit partial-archive indicator. AI analysis advises; review and ledger recording still use the panel controls.

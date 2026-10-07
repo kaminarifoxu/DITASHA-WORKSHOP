@@ -3,27 +3,47 @@ function Mail-Hash([string]$text){$sha=[Security.Cryptography.SHA256]::Create();
 function Mail-State {
  $saved=@(Load-Json 'mail-sort.dpapi' $true)
  if(!$saved.Count){return [pscustomobject]@{enabled=$false;lastRun='';lastError='';exportError='';nextAccount=0;cursors=@();records=@();accounts=@()}}
- return $saved[0]
+ $state=$saved[0];$changed=0
+ foreach($record in @($state.records)){
+  if($record.classificationVersion -eq 2 -or $record.review -in @('confirmed','recorded','excluded') -or $record.ledgerId){continue}
+  $new=Mail-Record @{id='migration';email=$record.account} $record.validity @{subject=$record.subject;from=$record.sender;content=$record.excerpt;date=$record.date;uid=$record.uid;messageId=''}
+  foreach($key in @('category','paymentType','kind','amount','currency','dueDate','review','reason')){$record.$key=$new.$key}
+  $record | Add-Member -NotePropertyName classificationVersion -NotePropertyValue 2 -Force;$changed++
+ }
+ if($changed){$state | Add-Member -NotePropertyName reclassified -NotePropertyValue $changed -Force;Mail-Save $state}
+ return $state
+}
+function Mail-PaymentType([string]$text){
+ if($text -match '(?i)\b(payment failed|payment declined|payment unsuccessful|pembayaran gagal|transaksi gagal|gagal dibayar|declined transaction)\b'){return 'Pembayaran gagal'}
+ if($text -match '(?i)\b(refund (?:received|issued|processed|completed)|pengembalian dana (?:diterima|berhasil)|dana dikembalikan)\b'){return 'Pengembalian'}
+ if($text -match '(?i)\b(payment received|pembayaran diterima|dana masuk|transfer masuk|transaksi masuk|gaji diterima|salary paid|cashback received)\b'){return 'Pemasukan'}
+ if($text -match '(?i)\b(you paid|you sent|payment successful|payment completed|successfully paid|pembayaran berhasil|transaksi berhasil|transfer berhasil|bukti pembayaran|bukti transfer|payment receipt|receipt for|kwitansi|telah dibayar|sudah dibayar|lunas)\b'){return 'Bukti pembayaran'}
+ if($text -match '(?i)\b(unpaid|not paid|payment due|amount due|belum dibayar|jatuh tempo|your invoice|invoice (?:number|no|#|\d)|tagihan|faktur)\b'){return 'Tagihan'}
+ if($text -match '(?i)\b(receipt|refund|salary|gaji)\b'){return 'Perlu ditinjau'}
+ return ''
 }
 function Mail-Category([string]$subject,[string]$sender,[string]$body){
- $text=$subject+"`n"+$body
- # Offers about money are promotions; security notices about a bank are security.
- if($text -match '(?i)\b(verification code|kode verifikasi|one.time password|password reset|reset password|security alert|login baru|new sign.in|otp)\b'){return 'Keamanan'}
- if($subject -match '(?i)\b(discount|diskon|promo|cashback|sale|penawaran|offer|voucher|newsletter)\b'){return 'Promosi'}
- if($text -match '(?i)\b(invoice|receipt|payment|paid|refund|billing|tagihan|pembayaran|pengeluaran|pemasukan|lunas|transfer|saldo|kwitansi|faktur|gaji|salary|bank statement|biaya|subscription|langganan)\b' -or $text -match '(?i)\b(Rp\s*\d|IDR\s*\d|USD\s*\d|EUR\s*\d)'){return 'Keuangan'}
- if($text -match '(?i)\b(shipped|shipping|delivery|pesanan|pengiriman|resi|paket|order confirmation)\b'){return 'Pesanan'}
- if($text -match '(?i)\b(meeting|project|deadline|rapat|proyek|interview|lamaran|pekerjaan|client|klien|contract|kontrak)\b'){return 'Pekerjaan'}
- if($sender -match '(?i)(facebook|instagram|tiktok|linkedin|discord|twitter)' -or $subject -match '(?i)\b(followed|mentioned|commented|menyukai|komentar|pengikut)\b'){return 'Sosial'}
- if($subject -match '(?i)\b(birthday|ulang tahun|family|keluarga|invitation|undangan)\b'){return 'Pribadi'}
+ $intro=([string]$body).Substring(0,[Math]::Min(1600,([string]$body).Length))
+ if($subject -match '(?i)(verification code|kode verifikasi|one.time password|password reset|reset password|security alert|login baru|new sign.in|\botp\b|tetap log.?in|perangkat tepercaya|trusted device|verify your|verifikasi akun)'){return 'Keamanan'}
+ $direct=Mail-PaymentType $subject
+ if($direct -and $direct -ne 'Perlu ditinjau'){return 'Keuangan'}
+ if($subject -match '(?i)(discount|diskon|\bpromo\b|penawaran|\boffer\b|voucher|newsletter|\bsale\b|free months|months (?:of|for) free|gratis|try premium|set the mood|mulai bisnis|start your business|cashback|upgrade now)'){return 'Promosi'}
+ if($subject -match '(?i)(total pengeluaranmu|monthly summary|monthly statement|bank statement|account statement|ringkasan (?:akun|saldo|pengeluaran)|laporan (?:bulanan|rekening)|mutasi rekening)'){return 'Laporan keuangan'}
+ if($subject -match '(?i)(storage.*full|penyimpanan.*penuh|aktifkan rekening|activate your account|account activation|konfirmasi alamat|verify.*email|refund policy|terms.*update)'){return 'Layanan akun'}
+ if($intro -match '(?i)(verification code|kode verifikasi|one.time password|reset password|\botp\b)'){return 'Keamanan'}
+ $bodyType=Mail-PaymentType $intro
+ if($bodyType -and $bodyType -ne 'Perlu ditinjau' -and ($intro -notmatch '(?i)(get.*free months|coba.*gratis|penawaran khusus|limited.time offer)' -or $direct)){return 'Keuangan'}
+ if($subject -match '(?i)(payment|pembayaran|billing|invoice|transfer|transaksi|receipt|refund|salary|gaji)'){return 'Keuangan'}
+ if($subject -match '(?i)(shipped|shipping|delivery|pesanan|pengiriman|resi|paket|order confirmation)'){return 'Pesanan'}
+ if($subject -match '(?i)(meeting|project|deadline|rapat|proyek|interview|lamaran|pekerjaan|client|klien|contract|kontrak)'){return 'Pekerjaan'}
+ if($sender -match '(?i)(facebook|instagram|tiktok|linkedin|discord|twitter)' -or $subject -match '(?i)(followed|mentioned|commented|menyukai|komentar|pengikut)'){return 'Sosial'}
+ if($subject -match '(?i)(birthday|ulang tahun|family|keluarga|invitation|undangan)'){return 'Pribadi'}
  return 'Lainnya'
 }
-function Mail-Finance([string]$text){
- $status='Perlu ditinjau';$kind='expense'
- if($text -match '(?i)\b(refund|pengembalian dana|dikembalikan)\b'){$status='Pengembalian';$kind='income'}
- elseif($text -match '(?i)\b(salary|gaji|payment received|pembayaran diterima|dana masuk|transfer masuk|pemasukan)\b'){$status='Pemasukan';$kind='income'}
- elseif($text -match '(?i)\b(unpaid|not paid|payment due|amount due|belum dibayar|jatuh tempo)\b'){$status='Tagihan'}
- elseif($text -match '(?i)\b(paid|lunas|payment successful|payment received|pembayaran berhasil|receipt|kwitansi)\b'){$status='Bukti pembayaran'}
- elseif($text -match '(?i)\b(unpaid|payment due|amount due|belum dibayar|jatuh tempo|tagihan|invoice)\b'){$status='Tagihan'}
+function Mail-Finance([string]$text,[string]$subject=''){
+ $status=Mail-PaymentType $subject;if(!$status){$status=Mail-PaymentType $text};if(!$status){$status='Perlu ditinjau'}
+ if($status -eq 'Perlu ditinjau' -and $text -match '(?i)\b(refund|pengembalian dana)\b'){$status='Pengembalian'}
+ $kind=if($status -in @('Pemasukan','Pengembalian')){'income'}else{'expense'}
  $matches=[regex]::Matches($text,'(?i)(?:\b(Rp|IDR|USD|EUR|GBP)\s*([0-9][0-9.,]*[0-9]|[0-9])|([$€£])\s*([0-9][0-9.,]*[0-9]|[0-9]))')
  $values=@();foreach($m in $matches){$currency=$m.Groups[1].Value.ToUpperInvariant();$raw=$m.Groups[2].Value;if(!$currency){$currency=@{'$'='USD';'€'='EUR';'£'='GBP'}[$m.Groups[3].Value];$raw=$m.Groups[4].Value};if($currency -eq 'RP'){$currency='IDR'}
   $number=$null;if($currency -eq 'IDR'){
@@ -42,8 +62,8 @@ function Mail-Finance([string]$text){
 function Mail-Record($account,$validity,$message){
  $key=if($message.messageId){'message:'+([string]$message.messageId).Trim().ToLowerInvariant()}else{'imap:'+$account.id+':'+$validity+':'+$message.uid}
  $category=Mail-Category $message.subject $message.from $message.content
- $record=[ordered]@{id=(Mail-Hash $key);account=$account.email;uid=$message.uid;validity=$validity;subject=([string]$message.subject).Substring(0,[Math]::Min(500,([string]$message.subject).Length));sender=([string]$message.from).Substring(0,[Math]::Min(500,([string]$message.from).Length));date=([string]$message.date).Substring(0,[Math]::Min(120,([string]$message.date).Length));transactionDate='';category=$category;excerpt=([string]$message.content).Substring(0,[Math]::Min(2500,([string]$message.content).Length));collectedAt=[DateTime]::UtcNow.ToString('o');paymentType='';kind='';amount=$null;currency='';dueDate='';review='';reason='';ledgerId=''}
- if($category -eq 'Keuangan'){$finance=Mail-Finance ($message.subject+"`n"+$message.content);foreach($name in $finance.Keys){$record[$name]=$finance[$name]}}
+ $record=[ordered]@{id=(Mail-Hash $key);account=$account.email;uid=$message.uid;validity=$validity;subject=([string]$message.subject).Substring(0,[Math]::Min(500,([string]$message.subject).Length));sender=([string]$message.from).Substring(0,[Math]::Min(500,([string]$message.from).Length));date=([string]$message.date).Substring(0,[Math]::Min(120,([string]$message.date).Length));transactionDate='';category=$category;excerpt=([string]$message.content).Substring(0,[Math]::Min(2500,([string]$message.content).Length));collectedAt=[DateTime]::UtcNow.ToString('o');paymentType='';kind='';amount=$null;currency='';dueDate='';review='';reason='';ledgerId='';classificationVersion=2}
+ if($category -eq 'Keuangan'){$finance=Mail-Finance ($message.subject+"`n"+$message.content) $message.subject;foreach($name in $finance.Keys){$record[$name]=$finance[$name]}}
  return [pscustomobject]$record
 }
 function Mail-TaskName {return 'DITASHA-Lora-'+(Mail-Hash ([IO.Path]::GetFullPath($Store).ToLowerInvariant())).Substring(0,12)}
@@ -67,7 +87,14 @@ function Mail-View($state,$page=0,$mailPage=0,$category='Semua',$review='Semua')
  $page=[Math]::Max(0,[Math]::Min(100,[int]$page));$mailPage=[Math]::Max(0,[Math]::Min(100,[int]$mailPage))
  $all=@($state.records);$counts=@{};foreach($record in $all){if(!$counts.ContainsKey($record.category)){$counts[$record.category]=0};$counts[$record.category]++}
   $mailRows=@($all|Where-Object {$category -eq 'Semua' -or $_.category -eq $category}|Sort-Object collectedAt -Descending);$paymentRows=@($all|Where-Object {$_.category -eq 'Keuangan' -and ($review -eq 'Semua' -or $_.review -eq $review)}|Sort-Object collectedAt -Descending)
- return @{paymentTotal=$paymentRows.Count;mailTotal=$mailRows.Count;enabled=$state.enabled;lastRun=$state.lastRun;lastError=$state.lastError;exportError=$state.exportError;accounts=@($state.accounts);total=$all.Count;counts=$counts;messages=@($mailRows|Select-Object -Skip ($mailPage*100) -First 100|Select-Object id,date,account,subject,sender,category);payments=@($paymentRows|Select-Object -Skip ($page*200) -First 200);pending=@($all|Where-Object {$_.review -eq 'pending'}).Count;reportPath=(Join-Path $Store 'Reports\Lora-Achi.xlsx');schedule=(Mail-TaskInfo)}
+ return @{reclassified=$state.reclassified;paymentTotal=$paymentRows.Count;mailTotal=$mailRows.Count;enabled=$state.enabled;lastRun=$state.lastRun;lastError=$state.lastError;exportError=$state.exportError;accounts=@($state.accounts);total=$all.Count;counts=$counts;messages=@($mailRows|Select-Object -Skip ($mailPage*100) -First 100|Select-Object id,date,account,subject,sender,category);payments=@($paymentRows|Select-Object -Skip ($page*200) -First 200);pending=@($all|Where-Object {$_.review -eq 'pending'}).Count;reportPath=(Join-Path $Store 'Reports\Lora-Achi.xlsx');schedule=(Mail-TaskInfo)}
+}
+function Mail-FinanceContext($state){
+ $payments=@($state.records|Where-Object {$_.category -eq 'Keuangan' -and $_.review -ne 'excluded'})
+ $entries=@($payments|Sort-Object collectedAt -Descending|Select-Object -First 30 id,account,date,transactionDate,subject,category,paymentType,kind,amount,currency,review,reason,excerpt)
+ $statements=@($state.records|Where-Object {$_.category -eq 'Laporan keuangan'}|Sort-Object collectedAt -Descending|Select-Object -First 5 subject,date,account,excerpt)
+ foreach($entry in (@($entries)+@($statements))){$entry.excerpt=([string]$entry.excerpt).Substring(0,[Math]::Min(600,([string]$entry.excerpt).Length))}
+ return @{reclassified=$state.reclassified;lastRun=$state.lastRun;lastError=$state.lastError;total=$payments.Count;pending=@($payments|Where-Object {$_.review -eq 'pending'}).Count;recorded=@($payments|Where-Object {$_.review -eq 'recorded'}).Count;payments=$entries;partial=($payments.Count -gt 30);statements=$statements;scope='Saved sorted email archive, all dates; separate from the recorded ledger. Classification rules may normalize old unreviewed records. No fresh inbox scan or ledger write performed.'}
 }
 function Mail-Cell($value,[string]$reference,[bool]$numeric=$false,[int]$style=1){
  if($null -eq $value){return '<c r="'+$reference+'"/>'}

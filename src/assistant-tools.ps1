@@ -100,6 +100,7 @@ try{
  if($action -like 'mail*'){$mailMutex=New-Object Threading.Mutex($false,('Local\DITASHA-Mail-'+(Mail-Hash $Store).Substring(0,12)));try{$mailLocked=$mailMutex.WaitOne(30000)}catch [Threading.AbandonedMutexException]{$mailLocked=$true};if(!$mailLocked){throw 'Lora sedang memeriksa email. Coba lagi setelah selesai.'}}
  $accounts=@(Load-Json 'mail-accounts.dpapi' $true);$roots=@(Load-Json 'file-roots.json')
  switch($action){
+  'mailFinanceContext' {$result=Mail-FinanceContext (Mail-State)}
   'status' {$result=@{accounts=@(Metadata $accounts);roots=@($roots)}}
   'emailAdd' {
    if($accounts.Count -ge 20){throw 'Maksimal 20 akun email.'};if([string]$request.email -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$' -or $request.email.Length -gt 254 -or [string]$request.host -notmatch '^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$' -or [string]::IsNullOrWhiteSpace($request.password) -or $request.password.Length -gt 512){throw 'Email, server IMAP, atau app password tidak valid.'}

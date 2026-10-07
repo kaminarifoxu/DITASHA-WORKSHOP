@@ -227,6 +227,8 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
+          Improves Lora payment triage to separate promotions, account/security notices and monthly statements from actual receipts, invoices, incoming transfers and failed payments. Reclassifies old unreviewed records while preserving manual reviews and ledger entries. Achi analysis receives saved payment-email evidence separately from recorded ledger totals.
+
           Fixes the packaged office layout and adds a real 3D Sakura room with furniture, moving employees and a 2D fallback. Shows saved email accounts above the add-account form, with encrypted account-vault recovery and Windows restart/update persistence tests. The release checks that the EXE embeds the exact checked frontend.
 
           Adds chat beside the office using the same saved conversations and team workflow. Smaller windows have office/chat tabs. Sakura studio adds Japanese-inspired wood, flooring and windows, with adult anime-inspired 3D employees, eight walking poses and alternating work poses.
