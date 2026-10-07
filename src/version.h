@@ -1,6 +1,7 @@
 #ifndef DITASHA_VERSION_H
 #define DITASHA_VERSION_H
-#define APP_VERSION "3.18.0"
-#define APP_VERSION_W L"3.18.0"
-#define APP_VERSION_TUPLE 3,18,0,0
+#define APP_VERSION "3.19.0"
+#define APP_VERSION_W L"3.19.0"
+#define APP_VERSION_TUPLE 3,19,0,0
 #endif
+

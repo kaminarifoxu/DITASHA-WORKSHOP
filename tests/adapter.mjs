@@ -6,6 +6,7 @@ let providerKeys={groq:false,gemini:false,openai:false,custom:false};
 let chatgptStatus={provider:'openrouter',connected:false,permitted:false,models:[]};
 let listener,stored=null,key=false,lastOp,lastMessages,failAI=false,failSave=false,dispatchTarget='general',badDispatch=false,failWorker=false,dispatchPrompt='',failTrends=false,handoffTarget='writer';
 let mailPayments=[],failMailAck=false;
+let activeTools=0,peakTools=0;
 const toolCalls=[];
 const aiCalls=[];let activeAI=0,peakAI=0;
 const feedXML='<rss xmlns:ht="https://trends.google.com/trending/rss"><channel><item><title>FiveM community update</title><pubDate>Wed, 07 Oct 2026 00:00:00 GMT</pubDate><ht:approx_traffic>1000+</ht:approx_traffic><ht:news_item><ht:news_item_title>Community story</ht:news_item_title><ht:news_item_url>https://example.com/story</ht:news_item_url><ht:news_item_source>Example</ht:news_item_source></ht:news_item></item></channel></rss>';
@@ -19,11 +20,11 @@ globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},post
   else if(op==='apiKeyStatus')data={provider:chatgptStatus.provider,keys:{openrouter:key,...providerKeys}};
   else if(op==='saveKey')key=true;
   else if(op==='save'){if(failSave)throw new Error('Disk full');stored=JSON.parse(payload);}
-  else if(op==='assistantTools'){const r=JSON.parse(payload);toolCalls.push(r);if(r.action==='status')data={accounts:[{id:'mail-1',email:'test@example.com'}],roots:[{id:'root-1',path:'C:\\Allowed'}]};else if(r.action==='emailCheck')data={messages:[{uid:'8',subject:'Meeting',from:'test@example.com'}],unread:1,checkedAt:'2026-10-07T00:00:00Z'};else if(r.action==='mailFinanceContext')data={payments:mailPayments,total:mailPayments.length,pending:mailPayments.filter(p=>p.review==='pending').length,scope:'Saved archive; separate from ledger'};else if(r.action==='mailStatus')data={payments:mailPayments};else if(r.action==='mailPayment')data=mailPayments.find(p=>p.id===r.id);else if(r.action==='mailReview'){if(failMailAck)throw new Error('Mail store busy');const payment=mailPayments.find(p=>p.id===r.id);payment.review='recorded';data={payments:mailPayments};}else if(r.action==='fileList')data={files:[{path:'notes.txt',size:4}],truncated:false};else throw new Error('Unexpected tool operation');}
+  else if(op==='assistantTools'){activeTools++;peakTools=Math.max(peakTools,activeTools);if(activeTools>1)throw new Error('Native tools busy');const r=JSON.parse(payload);toolCalls.push(r);if(r.action==='status')data={accounts:[{id:'mail-1',email:'test@example.com'}],roots:[{id:'root-1',path:'C:\\Allowed'}]};else if(r.action==='emailCheck')data={messages:[{uid:'8',subject:'Meeting',from:'test@example.com'}],unread:1,checkedAt:'2026-10-07T00:00:00Z'};else if(r.action==='mailLedgerEntries')data={payments:mailPayments.filter(p=>p.autoSorted&&['auto','recorded'].includes(p.review)&&p.currency==='IDR')};else if(r.action==='mailLedgerAck'){if(failMailAck)throw new Error('Mail store busy');for(const id of r.ids)mailPayments.find(p=>p.id===id).review='recorded';data={acknowledged:r.ids.length};}else if(r.action==='mailFinanceContext')data={payments:mailPayments,total:mailPayments.length,pending:mailPayments.filter(p=>p.review==='pending').length,scope:'Saved archive; separate from ledger'};else if(r.action==='mailStatus')data={payments:mailPayments};else if(r.action==='mailPayment')data=mailPayments.find(p=>p.id===r.id);else if(r.action==='mailReview'){if(failMailAck)throw new Error('Mail store busy');const payment=mailPayments.find(p=>p.id===r.id);payment.review=r.review;data={payments:mailPayments};}else if(r.action==='fileList')data={files:[{path:'notes.txt',size:4}],truncated:false};else throw new Error('Unexpected tool operation');}
   else if(op==='trends'){if(failTrends)throw new Error('Trends offline');data={rss:feedXML,source:'https://trends.google.com/trending/rss?geo=ID'};}
   else if(op==='ai'||op==='aiCoding'||op==='aiEmployee'){const route=JSON.parse(payload);lastOp=op==='aiEmployee'?(route.coding?'aiCoding':'ai'):op;lastMessages=op==='aiEmployee'?route.messages:route;aiCalls.push({op:lastOp,messages:lastMessages,route:op==='aiEmployee'?route:null});if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.startsWith('You are Mika')){data={choices:[{message:{content:JSON.stringify({analysis:'Google search trends; source https://example.com/story',handoff_employee_id:handoffTarget,brief:'Write a caption based on the supplied trend'})}}]};}else if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
  }catch(error){ok=false;data={error:error.message};}
- queueMicrotask(()=>{if(op==='ai'||op==='aiCoding'||op==='aiEmployee')activeAI--;listener({data:{id:Number(id),ok,data}});});
+ queueMicrotask(()=>{if(op==='assistantTools')activeTools--;if(op==='ai'||op==='aiCoding'||op==='aiEmployee')activeAI--;listener({data:{id:Number(id),ok,data}});});
 }}}};
 const {parseTrendFeed}=await import('../frontend/test-build/trends.mjs');
 assert.equal(parseTrendFeed(feedXML)[0].title,'FiveM community update');
@@ -233,6 +234,22 @@ assert(aiCalls.at(-1).messages[0].content.includes('An empty ledger does not mea
 console.log('Passed: Achi receives pending payment email evidence separately from the recorded ledger.');
 console.log('Passed: reviewed IDR-only email ledger import, authoritative native evidence, disk failure preservation and duplicate-safe retry after partial handoff failure.');
 
+// Automatic ledger handoff must survive failed saves and repeated acknowledgements.
+const automaticId='d'.repeat(64);
+mailPayments=[{id:automaticId,autoSorted:true,review:'auto',paymentType:'Bukti pembayaran',currency:'IDR',amount:16000,transactionDate:'2026-10-07',dateSource:'email',kind:'expense',subject:'Transaksimu Pakai blu Berhasil',account:'one@example.test'}];
+const automaticBefore=await afterRestart.exportBackup();failSave=true;await assert.rejects(afterRestart.api('/api/money/sync-mail',{}),/Disk/);failSave=false;
+assert.equal(await afterRestart.exportBackup(),automaticBefore);assert.equal(mailPayments[0].review,'auto');
+failMailAck=true;const automaticPartial=await afterRestart.api('/api/money/sync-mail',{});assert.equal(automaticPartial.added,1);assert.equal(automaticPartial.pendingAck,1);
+failMailAck=false;const automaticRetry=await afterRestart.api('/api/money/sync-mail',{});assert.equal(automaticRetry.added,0);assert.equal(mailPayments[0].review,'recorded');
+assert.equal((await afterRestart.api('/api/workspace')).money.transactions.filter(t=>t.id==='mail-'+automaticId).length,1);
+await afterRestart.api('/api/money',{action:'delete',id:'mail-'+automaticId});assert.equal(mailPayments[0].review,'excluded');
+assert.equal((await afterRestart.api('/api/workspace')).money.transactions.filter(t=>t.id==='mail-'+automaticId).length,0,'Deleted automatic receipt is not resurrected');
+mailPayments=[{...mailPayments[0],id:'e'.repeat(64),review:'auto',currency:'USD',amount:3}];
+assert.equal((await afterRestart.api('/api/money/sync-mail',{})).added,0,'Other currencies stay outside IDR ledger');
+mailPayments=[];
+await Promise.all([afterRestart.native('assistantTools',JSON.stringify({action:'status'})),afterRestart.native('assistantTools',JSON.stringify({action:'mailLedgerEntries'}))]);assert.equal(peakTools,1,'Background and panel tools share the native single-process limit');
+console.log('Passed: automatic payment ledger handoff, failed save, acknowledgement retry, deduplication, deletion and separate currencies.');
+
 // Phone work must survive restart without repeating provider calls.
 const remoteId='11111111-1111-4111-8111-111111111111';
 const prepared=await afterRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'});
@@ -260,3 +277,4 @@ await syncRestart.api('/api/chats/delete',{id:prepared.chatId});
 await syncRestart.importBackup(await syncRestart.exportBackup());
 assert.equal((await syncRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'})).status,'completed');
 console.log('Passed: durable phone completion/restart, no repeated AI work, interrupted-job review, snapshot privacy and atomic receipt persistence.');
+

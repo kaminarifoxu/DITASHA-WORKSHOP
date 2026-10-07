@@ -19,7 +19,7 @@ try{
    window.chrome={webview:{addEventListener:(_,fn)=>callback=fn,postMessage:message=>{const [op,id,...rest]=message.split('\n'),payload=rest.join('\n');let data=true;
     if(op==='load')data=stored;else if(op==='save')stored=JSON.parse(payload);else if(op==='hasKey')data=true;else if(op==='apiKeyStatus')data={provider:'openrouter',keys:{openrouter:true,groq:false,gemini:false,openai:false,custom:false}};
     else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.17.0',status:'Ready',version:'',ready:false,automatic:true};
-    else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[{id:'saved-one',label:'Personal',email:'one@example.test',host:'imap.example.test'},{id:'saved-two',label:'Work',email:'two@example.test',host:'imap.example.test'}],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
+    else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[{id:'saved-one',label:'Personal',email:'one@example.test',host:'imap.example.test'},{id:'saved-two',label:'Work',email:'two@example.test',host:'imap.example.test'}],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:JSON.parse(payload).action==='mailStatus'?[{id:'f'.repeat(64),subject:'Discord payment failed',account:'one@example.test',paymentType:'Pembayaran gagal',review:'sorted',amount:null,currency:'',reason:'Tidak ada uang keluar',date:'2026-10-07'},{id:'e'.repeat(64),subject:'You paid to Merchant',account:'one@example.test',paymentType:'Bukti pembayaran',review:'sorted',amount:3,currency:'USD',reason:'Disortir otomatis',date:'2026-10-07'}]:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
     else if(op==='aiEmployee'){const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON')){if(!window.__completeFixture)return;data={choices:[{message:{content:'Completed inline office chat test.'}}]};queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));return;}data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:(window.__completeFixture?['writer']:['writer','planner','developer','designer','web','finance']).map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
     queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));
    }}};
@@ -46,6 +46,14 @@ try{
   await page.setViewportSize({width:800,height:720});
   await page.getByRole('button',{name:'Kantor',exact:true}).click();await floorFits(page);
   await page.getByRole('button',{name:'Chat Amii',exact:true}).click();assert(await page.getByRole('textbox',{name:'Pesan untuk AI'}).isVisible());await frameFits(page);
+  await page.getByRole('button',{name:'Keuangan, email & file',exact:true}).click();
+  await page.getByRole('button',{name:'Achi Keuangan',exact:true}).click();
+  await page.getByText('Discord payment failed',{exact:true}).waitFor();
+  assert.equal(await page.locator('tbody').getByText('Disortir otomatis',{exact:true}).count(),2,'Recognized outcomes do not require manual review');
+  assert(await page.getByText('Tidak ada uang keluar',{exact:true}).isVisible());
+  assert.equal(await page.getByRole('button',{name:'Catat di ledger',exact:true}).count(),0,'Sorted failure/foreign receipt does not demand ledger confirmation');
+  await frameFits(page);if(custom===0)await page.screenshot({path:join(output,'achi-automatic.png')});
+  await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
   await page.setViewportSize({width:1440,height:900});await page.evaluate(()=>window.__completeFixture=false);
   await page.getByRole('button',{name:'Long conversation'}).first().click();await page.locator('.messages .message').last().waitFor();await frameFits(page);
   assert(await page.locator('.messages').evaluate(e=>e.scrollHeight>e.clientHeight));
@@ -60,3 +68,4 @@ try{
  }
  console.log('Desktop layout passed: fixed frame at 1024/1280/1440, complete 10/18-person office, dashboard, long chat composer, working board, settings panels, real 3D rendering and saved email accounts.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}
+

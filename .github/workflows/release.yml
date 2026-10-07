@@ -227,6 +227,8 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
+          Automates the Lora-to-Achi handoff: immediate first scan when enabling the 20-minute schedule, automatic payment-status buckets and separate currency totals, automatic Excel updates, and duplicate-safe local ledger imports for clear completed IDR evidence. Failed payments and unpaid invoices stay outside spending; ambiguous evidence alone needs attention. Fixes successful blu payment and blu advertisement subjects. Preserves existing manual decisions and email accounts.
+
           Improves Lora payment triage to separate promotions, account/security notices and monthly statements from actual receipts, invoices, incoming transfers and failed payments. Reclassifies old unreviewed records while preserving manual reviews and ledger entries. Achi analysis receives saved payment-email evidence separately from recorded ledger totals.
 
           Fixes the packaged office layout and adds a real 3D Sakura room with furniture, moving employees and a 2D fallback. Shows saved email accounts above the add-account form, with encrypted account-vault recovery and Windows restart/update persistence tests. The release checks that the EXE embeds the exact checked frontend.
@@ -241,8 +243,9 @@ jobs:
 
           Download DITASHA-Workspace.exe for Windows, DITASHA-Companion.apk for Android and DITASHA-Sync-Server.zip for the VPS. Follow the server package README for DNS, Docker and either existing Nginx or Caddy HTTPS setup. VPS deployment still requires your server configuration. The Android APK is a personal preview; build/signature checks pass, but physical-device testing and live VPS/AI account testing require your setup.
 
-          Existing office collaboration, Lora's 20-minute sorting and Achi's reviewed IDR ledger imports remain available. No automatic email sending or money transfers.
+          Existing office collaboration, Lora's 20-minute sorting and Achi's automatic clear-IDR ledger imports remain available. No automatic email sending or money transfers.
 
           This repository is private. Configure a fine-grained GitHub token with Contents: Read-only in app Settings for Windows updates. Source code and SHA-256 checksums are included.
           NOTES
           gh release create "$TAG" release-files/DITASHA-Workspace.exe release-files/DITASHA-Workspace.exe.sha256 release-files/DITASHA-Workspace-Source.zip release-files/DITASHA-Companion.apk release-files/DITASHA-Companion.apk.sha256 release-files/DITASHA-Sync-Server.zip release-files/DITASHA-Sync-Server.zip.sha256 --target "$GITHUB_SHA" --title "DITASHA Workspace $TAG" --notes-file release-notes.md
+

@@ -140,3 +140,14 @@ The Sakura office now renders real 3D furniture, tatami, shoji windows, plants, 
 ## Payment triage and Achi evidence (3.18.0)
 
 Lora classifies the main purpose of emails instead of treating every price or bank mention as a payment. Promotions, login/account notices and monthly summaries stay outside the payment queue. Explicit paid receipts, incoming transfers, failed payments and unpaid invoices have distinct labels. Old unreviewed records are reclassified locally; manually confirmed, excluded and recorded entries remain unchanged. Achi analysis receives saved payment-email evidence alongside the recorded ledger, with separate counts and an explicit partial-archive indicator. AI analysis advises; review and ledger recording still use the panel controls.
+
+
+## Automatic Lora → Achi workflow (3.19.0)
+
+Enable **Aktifkan Lora + Achi otomatis** once in either the email or finance panel. Enabling starts the first scan immediately, then the existing Windows task continues every 20 minutes while the PC is awake, online and the owner is signed in. Already enabled schedules remain active. Lora sorts mail locally and Achi automatically organizes financial records and refreshes the Excel workbook, even with the app closed. No per-email confirmation is required for recognizable outcomes.
+
+Paid receipts, incoming transfers, refunds, unpaid invoices and failed payments have separate buckets and currency totals. Successful blu transaction subjects are recognized; blu conversion-fee advertisements stay in Promotions. Failed attempts do not count as spending and need no amount to be sorted. Unpaid invoices stay outside the ledger. Missing/conflicting amounts, unclear status or unparseable dates stay under **Butuh perhatian** rather than being guessed.
+
+Completed whole-Rupiah evidence with one amount and a readable date enters the workspace ledger automatically on opening the app and through a one-minute background sync while it is open. Explicit transaction dates take priority; otherwise the preserved email date is clearly identified as a fallback. Other currencies remain separate in Excel. Stable source IDs prevent repeated imports, workspace saves precede acknowledgement, and failed acknowledgements are retried. Removing an email-sourced ledger row also excludes its source from future automatic imports. Manual corrections, exclusions and previously recorded entries survive migration.
+
+Automation uses local deterministic rules with no provider API charge. AI chat can analyze the resulting evidence but does not execute sorting by merely replying. Inbox categorization remains local: no Gmail label changes, email moves/deletion, bank connections, bill payments or money transfers are performed. Initial archives are still processed in resumable batches of up to 20 messages per account per scan; attachments are not parsed.

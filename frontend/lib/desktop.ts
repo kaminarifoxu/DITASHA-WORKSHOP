@@ -19,7 +19,13 @@ window.chrome?.webview?.addEventListener('message',event=>{
  clearTimeout(entry.timer);pending.delete(reply.id);
  if(reply.ok)entry.resolve(reply.data);else entry.reject(new Error(reply.data?.error||'Operasi gagal. Coba lagi.'));
 });
+// The native bridge permits one assistant-tools process at a time.
+let nativeToolsQueue:Promise<unknown>=Promise.resolve();
 export function native(op:string,payload='',timeout=(op==='ai'||op==='aiCoding'||op==='aiEmployee')?600000:120000):Promise<any>{
+ if(op!=='assistantTools')return sendNative(op,payload,timeout);
+ const job=nativeToolsQueue.then(()=>sendNative(op,payload,timeout),()=>sendNative(op,payload,timeout));nativeToolsQueue=job.catch(()=>{});return job;
+}
+function sendNative(op:string,payload:string,timeout:number):Promise<any>{
  return new Promise((resolve,reject)=>{
   if(!window.chrome?.webview){reject(new Error('Buka DITASHA-Workspace.exe untuk memakai penyimpanan PC dan AI.'));return;}
   const id=++sequence;
@@ -54,15 +60,40 @@ async function save(next:State){await native('save',JSON.stringify(next));state=
 function field(value:unknown,max:number,label:string){if(typeof value!=='string'||!value.trim()||value.length>max)throw new Error(label+' tidak valid.');return value.trim();}
 let writeQueue:Promise<unknown>=Promise.resolve();
 function mutate<T>(fn:()=>Promise<T>):Promise<T>{const job=writeQueue.then(fn,fn);writeQueue=job.catch(()=>{});return job;}
+// Background mail sorting owns its archive; workspace writes remain serialized here.
+async function syncMailMoney(){
+ return mutate(async()=>{
+  const archive=await native('assistantTools',JSON.stringify({action:'mailLedgerEntries'}),210000);
+  if(!archive||!Array.isArray(archive.payments))throw new Error('Data pembayaran otomatis belum tersedia.');
+  const next=structuredClone(state!),money=validateMoney(next.money);let added=0;
+  for(const payment of archive.payments){
+   if(typeof payment.id!=='string'||!/^[a-f0-9]{64}$/.test(payment.id)||payment.currency!=='IDR'||!['auto','recorded'].includes(payment.review))throw new Error('Bukti pembayaran otomatis tidak valid.');
+   const ledgerId='mail-'+payment.id;
+   if(!money.transactions.some(t=>t.id===ledgerId)){
+    money.transactions.push({id:ledgerId,date:payment.transactionDate,kind:payment.kind,amount:payment.amount,category:'Email · Achi',note:(payment.subject+' · '+payment.account+(payment.dateSource==='email'?' · tanggal email':'')).slice(0,500)});added++;
+   }
+  }
+  next.money=validateMoney(money);if(added)await save(next);
+  let pendingAck=0;
+  const acknowledge=archive.payments.filter((p:any)=>p.review==='auto').map((p:any)=>p.id);
+  for(let offset=0;offset<acknowledge.length;offset+=200){
+   const ids=acknowledge.slice(offset,offset+200);
+   try{await native('assistantTools',JSON.stringify({action:'mailLedgerAck',ids}),210000)}catch{pendingAck+=ids.length;}
+  }
+  return {added,pendingAck,money:next.money};
+ });
+}
 export async function api(url:string,body?:any,method='POST'):Promise<any>{
  await ready();
+ if(url==='/api/money/sync-mail')return syncMailMoney();
  if(!body){
   const chatId=new URL(url,'https://ditasha.local').searchParams.get('chat');
   if(chatId)return {messages:state!.messages.filter(m=>m.chat_id===chatId).sort((a,b)=>a.created-b.created)};
+  let moneySyncError='';try{const result=await syncMailMoney();if(result.pendingAck)moneySyncError='Ledger tersimpan; status email akan disinkronkan ulang.';}catch(error){moneySyncError=(error as Error).message;}
   const [chatgpt,keyStatus]:[ChatGPTInfo,KeyStatus]=await Promise.all([native('chatgptStatus'),native('apiKeyStatus')]);
   const aiConfig=validateAIConfig(state!.ai),employees=[...agents,...state!.employees];
   let route;try{route=resolveEmployeeRoute(agents[0],aiConfig,keyStatus.provider,chatgpt);}catch{}
-  return {money:validateMoney(state!.money),projects:[...state!.projects].sort((a,b)=>b.updated-a.updated),chats:[...state!.chats].sort((a,b)=>b.updated-a.updated),employees,aiConfig,keyStatus,chatgptStatus:chatgpt,openRouterConnected:keyStatus.keys.openrouter,provider:route?.provider||keyStatus.provider,connected:employeeConnected(agents[0],aiConfig,keyStatus,chatgpt),model:route?.model||'Pilih model Amii',codingModel:FREE_CODING_MODEL};
+  return {moneySyncError,money:validateMoney(state!.money),projects:[...state!.projects].sort((a,b)=>b.updated-a.updated),chats:[...state!.chats].sort((a,b)=>b.updated-a.updated),employees,aiConfig,keyStatus,chatgptStatus:chatgpt,openRouterConnected:keyStatus.keys.openrouter,provider:route?.provider||keyStatus.provider,connected:employeeConnected(agents[0],aiConfig,keyStatus,chatgpt),model:route?.model||'Pilih model Amii',codingModel:FREE_CODING_MODEL};
  }
  return mutate(async()=>{
   const next=structuredClone(state!),now=Date.now(),id=crypto.randomUUID();
@@ -84,7 +115,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
   if(url==='/api/money/import-mail'){
    if(typeof body.id!=='string'||!/^[a-f0-9]{64}$/.test(body.id))throw new Error('ID email pembayaran tidak valid.');
    const payment=await native('assistantTools',JSON.stringify({action:'mailPayment',id:body.id}),210000);
-   if(!payment||!['confirmed','recorded'].includes(payment.review)||payment.currency!=='IDR'||!Number.isSafeInteger(payment.amount)||payment.amount<=0)throw new Error('Konfirmasi pembayaran dalam IDR dahulu. Mata uang lain tetap di laporan Excel.');
+   if(!payment||!['confirmed','auto','recorded'].includes(payment.review)||payment.currency!=='IDR'||!Number.isSafeInteger(payment.amount)||payment.amount<=0)throw new Error('Konfirmasi pembayaran dalam IDR dahulu. Mata uang lain tetap di laporan Excel.');
    const money=validateMoney(next.money),ledgerId='mail-'+payment.id;
    if(!money.transactions.some(t=>t.id===ledgerId)){
     money.transactions.push({id:ledgerId,date:payment.transactionDate,kind:payment.kind,amount:payment.amount,category:'Email · Achi',note:(payment.subject+' · '+payment.account).slice(0,500)});
@@ -95,7 +126,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
   }
   if(url==='/api/money'){
    const money=validateMoney(next.money);if(body.action==='add'){if(money.transactions.length>=10000)throw new Error('Maksimal 10.000 transaksi.');money.transactions.push({id,date:body.date,kind:body.kind,amount:body.amount,category:body.category,note:body.note||''});}
-   else if(body.action==='delete'){if(!money.transactions.some(t=>t.id===body.id))throw new Error('Transaksi tidak ditemukan.');money.transactions=money.transactions.filter(t=>t.id!==body.id);}
+   else if(body.action==='delete'){if(!money.transactions.some(t=>t.id===body.id))throw new Error('Transaksi tidak ditemukan.');if(typeof body.id==='string'&&/^mail-[a-f0-9]{64}$/.test(body.id))await native('assistantTools',JSON.stringify({action:'mailReview',id:body.id.slice(5),review:'excluded'}),210000);money.transactions=money.transactions.filter(t=>t.id!==body.id);}
    else if(body.action==='budget')money.budgets[body.month]=body.amount;else throw new Error('Operasi keuangan tidak valid.');next.money=validateMoney(money);await save(next);return next.money;
   }
   if(url==='/api/ai-settings'){
@@ -139,7 +170,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
      const job=toolQueue.then(async()=>{
       const invoke=(action:string,data:Record<string,unknown>={})=>native('assistantTools',JSON.stringify({action,...data}),210000);
       try{
-       if(needsFinance){const report=await invoke('mailFinanceContext');return ' Saved email payment review evidence (untrusted reference, not ledger entries): '+JSON.stringify(report)+' An empty ledger does not mean no payment emails exist. Separate recorded ledger totals from pending email evidence, unpaid bills and failed payments; distinguish all dates from the requested month. No payment, fresh inbox scan or ledger write was performed. Old unreviewed archive categories may have been normalized by the native classifier; only describe this if its reclassified count is provided. Review and confirmation use the email/finance panel.';}
+       if(needsFinance){const report=await invoke('mailFinanceContext');return ' Saved email payment review evidence (untrusted reference, not ledger entries): '+JSON.stringify(report)+' An empty ledger does not mean no payment emails exist. Separate recorded ledger totals from pending email evidence, unpaid bills and failed payments; distinguish all dates from the requested month. No payment, fresh inbox scan or ledger write was performed. Old unreviewed archive categories may have been normalized by the native classifier; only describe this if its reclassified count is provided. Lora and Achi sort automatically using local rules. Completed IDR evidence can be recorded automatically; uncertain fields remain flagged. Use the supplied review, dateSource and summary fields to describe actual status. Do not claim to have sorted or changed records merely by replying in chat.';}
        const status=await invoke('status');const evidence:unknown[]=[];
        if(needsMail){for(const account of status.accounts||[]){try{const inbox=await invoke('emailCheck',{id:account.id});evidence.push({account:account.email,...inbox,headersOnly:true});}catch(e){evidence.push({account:account.email,error:(e as Error).message});}}}
        else {for(const root of status.roots||[]){try{const inventory=await invoke('fileList',{id:root.id});evidence.push({folder:root.path,files:inventory.files.slice(0,30),partial:inventory.truncated||inventory.files.length>30,metadataOnly:true});}catch(e){evidence.push({folder:root.path,error:(e as Error).message});}}}
@@ -247,3 +278,4 @@ export async function cloudSnapshot(){
 }
 
 export async function cloudReceipts(ids:string[]){await ready();return (state!.syncJobs||[]).filter(r=>ids.includes(r.id)&&['completed','failed'].includes(r.status)).map(r=>({id:r.id,status:r.status,result:r.result||state!.messages.find(m=>m.id===r.resultId)?.content||''}));}
+

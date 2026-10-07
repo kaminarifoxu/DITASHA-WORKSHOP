@@ -100,6 +100,8 @@ try{
  if($action -like 'mail*'){$mailMutex=New-Object Threading.Mutex($false,('Local\DITASHA-Mail-'+(Mail-Hash $Store).Substring(0,12)));try{$mailLocked=$mailMutex.WaitOne(30000)}catch [Threading.AbandonedMutexException]{$mailLocked=$true};if(!$mailLocked){throw 'Lora sedang memeriksa email. Coba lagi setelah selesai.'}}
  $accounts=@(Load-Json 'mail-accounts.dpapi' $true);$roots=@(Load-Json 'file-roots.json')
  switch($action){
+  'mailLedgerAck' {$result=Mail-AckLedger (Mail-State) @($request.ids)}
+  'mailLedgerEntries' {$result=Mail-LedgerEntries (Mail-State)}
   'mailFinanceContext' {$result=Mail-FinanceContext (Mail-State)}
   'status' {$result=@{accounts=@(Metadata $accounts);roots=@($roots)}}
   'emailAdd' {
@@ -109,25 +111,25 @@ try{
   }
   'emailRemove' {if(!($accounts.id -contains $request.id)){throw 'Akun tidak ditemukan.'};$accounts=@($accounts|Where-Object {$_.id -ne $request.id});Save-Json 'mail-accounts.dpapi' $accounts $true;$result=@{accounts=@(Metadata $accounts)}}
   {$_ -in @('emailCheck','emailRead')} {$a=$accounts|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$a){throw 'Akun tidak ditemukan.'};$result=Email $a $action $request.uid}
-  'mailStatus' {$result=Mail-View (Mail-State) $request.page $request.mailPage $(if($request.category){$request.category}else{'Semua'}) $(if($request.review){$request.review}else{'Semua'})}
+  'mailStatus' {$result=Mail-View (Mail-State) $request.page $request.mailPage $(if($request.category){$request.category}else{'Semua'}) $(if($request.review){$request.review}else{'Semua'}) $(if($request.paymentType){$request.paymentType}else{'Semua'})}
   'mailPayment' {$state=Mail-State;$result=$state.records|Where-Object {$_.id -eq $request.id -and $_.category -eq 'Keuangan'}|Select-Object -First 1;if(!$result){throw 'Email pembayaran tidak ditemukan.'}}
-  'mailSchedule' {$state=Mail-State;Mail-Schedule ($request.enabled -eq $true);$state.enabled=($request.enabled -eq $true);Mail-Save $state;$result=Mail-View $state}
+  'mailSchedule' {$state=Mail-State;Mail-Schedule ($request.enabled -eq $true);$state.enabled=($request.enabled -eq $true);Mail-Save $state;$result=if($state.enabled){Mail-Scan $state $accounts}else{Mail-View $state}}
   {$_ -in @('mailScan','mailAutomatic')} {$state=Mail-State;if($action -eq 'mailAutomatic' -and !$state.enabled){$result=@{skipped=$true}}else{$result=Mail-Scan $state $accounts}}
   'mailExport' {$state=Mail-State;$path=Mail-Export $state;Mail-Save $state;$result=@{path=$path}}
   'mailReportData' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){$result=@{available=$false}}else{if((Get-Item -LiteralPath $path).Length -gt 4000000){throw 'Laporan Excel terlalu besar untuk sync. Maksimal 4 MB.'};$result=@{available=$true;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($path))}}}
   'mailReportOpen' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){throw 'Laporan belum tersedia. Jalankan pemeriksaan email dahulu.'};Start-Process -FilePath $path;$result=@{opened=$true}}
   'mailReview' {
    $state=Mail-State;$record=$state.records|Where-Object {$_.id -eq $request.id -and $_.category -eq 'Keuangan'}|Select-Object -First 1;if(!$record){throw 'Email pembayaran tidak ditemukan.'}
-   if($record.review -eq 'recorded'){throw 'Pembayaran sudah dicatat di ledger.'}
+   if($record.review -eq 'recorded' -and $request.review -ne 'excluded'){throw 'Pembayaran sudah dicatat di ledger.'}
    if($request.review -notin @('confirmed','excluded','pending','recorded')){throw 'Status review tidak valid.'}
-   if($request.review -eq 'recorded'){if($record.review -ne 'confirmed'){throw 'Konfirmasi pembayaran dahulu.'};if([string]$request.ledgerId -ne ('mail-'+$record.id)){throw 'ID ledger tidak valid.'};$record.ledgerId=$request.ledgerId}
+   if($request.review -eq 'recorded'){if($record.review -notin @('confirmed','auto')){throw 'Konfirmasi pembayaran dahulu.'};if([string]$request.ledgerId -ne ('mail-'+$record.id)){throw 'ID ledger tidak valid.'};$record.ledgerId=$request.ledgerId}
    elseif($request.review -eq 'confirmed'){
     if($request.kind -notin @('income','expense') -or [string]$request.currency -notmatch '^[A-Z]{3}$' -or $null -eq $request.amount -or [decimal]$request.amount -le 0 -or [decimal]$request.amount -gt 1000000000000 -or ([decimal]$request.amount*100)%1 -ne 0){throw 'Jumlah, mata uang atau jenis transaksi tidak valid.'}
     if($request.currency -eq 'IDR' -and ([decimal]$request.amount)%1 -ne 0){throw 'Jumlah IDR harus Rupiah utuh.'}
     $parsed=[DateTime]::MinValue;if(![DateTime]::TryParseExact([string]$request.date,'yyyy-MM-dd',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::None,[ref]$parsed)){throw 'Tanggal transaksi tidak valid.'}
-    $record.amount=[decimal]$request.amount;$record.currency=[string]$request.currency;$record.kind=$request.kind;$record.transactionDate=$request.date;$record.paymentType=if($request.kind -eq 'income'){'Pemasukan terkonfirmasi'}else{'Pengeluaran terkonfirmasi'};$record.reason='Dikonfirmasi pengguna untuk pencatatan. Tidak ada transfer uang.'
+    $record.autoSorted=$false;$record.amount=[decimal]$request.amount;$record.currency=[string]$request.currency;$record.kind=$request.kind;$record.transactionDate=$request.date;$record.paymentType=if($request.kind -eq 'income'){'Pemasukan terkonfirmasi'}else{'Pengeluaran terkonfirmasi'};$record.reason='Dikonfirmasi pengguna untuk pencatatan. Tidak ada transfer uang.'
    }
-   $record.review=$request.review;Mail-Save $state;try{$null=Mail-Export $state}catch{$state.exportError='Tutup laporan Excel lalu ekspor kembali.'};Mail-Save $state;$result=Mail-View $state
+   if($request.review -in @('pending','excluded')){$record.autoSorted=$false};$record.review=$request.review;Mail-Save $state;try{$null=Mail-Export $state}catch{$state.exportError='Tutup laporan Excel lalu ekspor kembali.'};Mail-Save $state;$result=Mail-View $state
   }
   'folderAdd' {$path=[IO.Path]::GetFullPath([string]$request.path);$item=Get-Item -LiteralPath $path -Force;if(!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Pilih folder biasa, bukan link.'};Check-Root @{path=$path};if($roots.Count -ge 20){throw 'Maksimal 20 folder.'};if($roots.path -notcontains $path){$roots+=@{id=[Guid]::NewGuid().ToString();path=$path};Save-Json 'file-roots.json' $roots};$result=@{roots=@($roots)}}
   'folderRemove' {$roots=@($roots|Where-Object {$_.id -ne $request.id});Save-Json 'file-roots.json' $roots;$result=@{roots=@($roots)}}
@@ -158,3 +160,4 @@ try{
 }
 
 finally{if($mailLocked){$mailMutex.ReleaseMutex()};if($mailMutex){$mailMutex.Dispose()}}
+

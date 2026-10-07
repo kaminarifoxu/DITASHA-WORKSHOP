@@ -24,6 +24,19 @@ $p=Mail-Finance 'Rp 25.000' 'Info Transaksi Masuk ke blu Kamu';Assert ($p.paymen
 $a=@{id='first';email='one@example.test'};$b=@{id='second';email='two@example.test'};$message=@{uid='1';messageId='<same@example.test>';subject='Receipt';from='bank@example.test';date='Wed, 07 Oct 2026 10:00:00 +0700';content='Payment successful Rp 125.000'}
 $one=Mail-Record $a '100' $message;$two=Mail-Record $b '200' $message;Assert ($one.id -eq $two.id) 'Message-ID dedupes copied mail across accounts'
 $message.messageId='';$one=Mail-Record $a '100' $message;$two=Mail-Record $a '200' $message;Assert ($one.id -ne $two.id) 'UIDVALIDITY reset does not collide with old UIDs'
+# Recognized outcomes are sorted automatically; only uncertain evidence remains pending.
+function TestRecord($subject,$body,$date='2026-10-07') {return Mail-Record $a '1' @{uid='10';messageId=$subject;subject=$subject;from='bank@example.test';date=$date;content=$body}}
+$auto=TestRecord 'Transaksimu Pakai blu Berhasil' 'Transaksi Rp 16.000';Assert ($auto.paymentType -eq 'Bukti pembayaran' -and $auto.review -eq 'auto' -and $auto.amount -eq 16000 -and $auto.transactionDate -eq '2026-10-07') 'blu successful payment sorted without confirmation'
+$failed=TestRecord 'Discord payment failed' 'Please update your payment method';Assert ($failed.review -eq 'sorted' -and $null -eq $failed.amount) 'Failure needs no invented amount or review'
+$bill=TestRecord 'Your invoice #42' 'Amount due Rp 20.000';Assert ($bill.review -eq 'sorted' -and $bill.paymentType -eq 'Tagihan') 'Unpaid invoice automatically sorted outside ledger'
+$foreign=TestRecord 'You paid to Merchant for invoice 4323' 'USD 3';Assert ($foreign.review -eq 'sorted' -and $foreign.currency -eq 'USD') 'Other currencies automatically sorted in Excel'
+$unclear=TestRecord 'Payment completed' 'Subtotal Rp 100.000 tax Rp 11.000 total Rp 111.000';Assert ($unclear.review -eq 'pending') 'Conflicting amounts require attention'
+$badDate=TestRecord 'Payment completed' 'Rp 20.000' 'unknown';Assert ($badDate.review -eq 'pending' -and !$badDate.transactionDate) 'Missing date never defaults to today'
+Assert ((Mail-Category 'Nikmati Transaksi Tanpa Biaya Konversi Kurs di bluValas Pakai Kartu Debit blu' 'bank@example.test' 'Transaksi Rp 10.000') -eq 'Promosi') 'blu promotional offer excluded'
+$ledger=Mail-LedgerEntries ([pscustomobject]@{records=@($auto,$failed,$bill,$foreign,$unclear,$badDate)})
+Assert ($ledger.payments.Count -eq 1 -and $ledger.payments[0].id -eq $auto.id) 'Only clear completed IDR evidence handed to ledger'
+$summary=Mail-PaymentSummary ([pscustomobject]@{records=@($auto,$failed,$bill,$foreign)})
+Assert (@($summary|Where-Object {$_.paymentType -eq 'Pembayaran gagal'}).Count -eq 1) 'Summary separates failed bucket'
 # IMAP wildcard search can return the last existing UID even with no new mail.
 $script:tag=0;$stream=[ImapTestStream]::new($utf.GetBytes("* SEARCH 8`r`nD1 OK search`r`n"));$batch=Email-ScanStream $stream @{lines=@('* OK [UIDVALIDITY 42] UIDs')} @{validity='42';lastUid='8'}
 Assert (@($batch.messages).Count -eq 0 -and $batch.lastUid -eq '8' -and $batch.remaining -eq 0) 'Ignore IMAP star result below cursor'
@@ -52,12 +65,15 @@ try{
  $ad=Mail-Record @{id='a';email='a@example.test'} '1' @{uid='1';messageId='ad';subject='Set the mood with 2 free months of Premium';from='music@example.test';date='2026-10-07';content='USD 12.99 per month. Payment terms.'}
  $ad.category='Keuangan';$ad.review='pending';$ad | Add-Member -NotePropertyName classificationVersion -NotePropertyValue 1 -Force
  $paid=Mail-Record @{id='a';email='a@example.test'} '1' @{uid='2';messageId='paid';subject='You paid to Merchant for invoice 1';from='payments@example.test';date='2026-10-07';content='Payment successful Rp 125.000'}
- $reviewed=$paid.PSObject.Copy();$reviewed.id='reviewed';$reviewed.review='recorded';$reviewed.ledgerId='ledger-1';$reviewed | Add-Member -NotePropertyName classificationVersion -NotePropertyValue 1 -Force
+ $paid.review='pending';$paid.classificationVersion=2;$reviewed=$paid.PSObject.Copy();$reviewed.id='reviewed';$reviewed.review='recorded';$reviewed.ledgerId='ledger-1';$reviewed | Add-Member -NotePropertyName classificationVersion -NotePropertyValue 1 -Force
  $script:archive=[pscustomobject]@{enabled=$false;lastRun='';lastError='';exportError='';nextAccount=0;cursors=@();records=@($ad,$paid,$reviewed);accounts=@()}
  function Load-Json {return $script:archive}
- $migrated=Mail-State;Assert ($migrated.records[0].category -eq 'Promosi' -and !$migrated.records[0].review) 'Old false payment automatically reclassified'
+ $migrated=Mail-State;Assert ($migrated.records[1].review -eq 'auto') 'Existing v2 receipt automatically sorted';Assert ($migrated.records[0].category -eq 'Promosi' -and !$migrated.records[0].review) 'Old false payment automatically reclassified'
  Assert ($migrated.records[2].review -eq 'recorded' -and $migrated.records[2].ledgerId -eq 'ledger-1') 'Reclassification preserves reviewed/recorded decisions'
- $context=Mail-FinanceContext $migrated;Assert ($context.total -eq 2 -and $context.pending -eq 1 -and $context.payments[0].subject -notmatch 'free months') 'AI evidence contains receipts, excludes advertisement and separates recorded count'
+ $context=Mail-FinanceContext $migrated;Assert ($context.total -eq 2 -and $context.pending -eq 0 -and $context.payments[0].subject -notmatch 'free months') 'AI evidence contains receipts, excludes advertisement and separates recorded count'
+ $ack=Mail-AckLedger $migrated @($paid.id);Assert ($ack.acknowledged -eq 1 -and $paid.review -eq 'recorded') 'Automatic ledger acknowledgement persists status'
+ $ack=Mail-AckLedger $migrated @($paid.id);Assert ($ack.acknowledged -eq 1) 'Repeated acknowledgement is idempotent'
+ $rejected=$false;try{$null=Mail-AckLedger $migrated @($ad.id)}catch{$rejected=$true};Assert $rejected 'Advertisement cannot be acknowledged as a payment'
  function Load-Json {return @()}
  $state=Mail-State;$message.messageId='<same@example.test>'
  function Email($account,$action,$cursor){if($account.id -eq 'broken'){throw 'Connection failed'};return @{validity='42';lastUid='1';remaining=0;messages=@($message)}}
@@ -82,3 +98,4 @@ try{
  }
 }finally{if($TestSchedule){try{Mail-Schedule $false}catch{}};[IO.Directory]::Delete($Store,$true)}
 'Passed: mail categories, conservative multi-currency extraction, bill/receipt/refund separation, UIDVALIDITY and pagination, read-only fetches, cross-account dedupe, retry/failure progress and Excel XML/formula protection.'
+
