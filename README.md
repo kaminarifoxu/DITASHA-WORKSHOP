@@ -132,3 +132,7 @@ The office floor and compact dashboard fit inside the app window. The office sca
 ## Sakura studio and office chat (3.16.0)
 
 Chat with Amii directly beside the office floor, using the same saved conversations, attachments and team handoffs as Percakapan. Smaller windows provide Kantor/Chat Amii tabs. The room uses warm wood, tatami-inspired flooring, shoji-style windows and sakura accents. All ten employees share adult anime-inspired 3D faces, eight walking poses, alternating work poses, idle breathing and correct direction changes.
+
+## 3D office and persistent email accounts (3.17.0)
+
+The Sakura office now renders real 3D furniture, tatami, shoji windows, plants, board and moving employee models in one scene. The 3D/2D switch keeps the original view available and falls back automatically when WebGL is unavailable. Chat remains beside the room. Saved email accounts are shown above the add-account form and reloaded from the same encrypted Windows-user data folder after an update. A current encrypted recovery copy protects the account vault. Blank password fields never expose saved credentials. Release checks verify the EXE contains the exact built frontend and exercise email restart/update/recovery on Windows.

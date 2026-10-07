@@ -9,12 +9,23 @@ function Save-Json($name,$value,$secret=$false){
  $path=Join-Path $Store $name;$bytes=$utf.GetBytes((ConvertTo-Json -InputObject $value -Depth 12 -Compress))
  if($secret){$bytes=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)}
  $tmp=Join-Path $Store ([Guid]::NewGuid().ToString()+'.tmp');$bak=$tmp+'.old'
- try{[IO.File]::WriteAllBytes($tmp,$bytes);if([IO.File]::Exists($path)){[IO.File]::Replace($tmp,$path,$bak)}else{[IO.File]::Move($tmp,$path)}}finally{if([IO.File]::Exists($tmp)){[IO.File]::Delete($tmp)};if([IO.File]::Exists($bak)){[IO.File]::Delete($bak)}}
+ try{[IO.File]::WriteAllBytes($tmp,$bytes);if([IO.File]::Exists($path)){[IO.File]::Replace($tmp,$path,$bak)}else{[IO.File]::Move($tmp,$path)}
+ if($name -eq 'mail-accounts.dpapi'){[IO.File]::Copy($path,$path+'.bak',$true)}
+ }finally{if([IO.File]::Exists($tmp)){[IO.File]::Delete($tmp)};if([IO.File]::Exists($bak)){[IO.File]::Delete($bak)}}
 }
-function Load-Json($name,$secret=$false){
- $path=Join-Path $Store $name;if(![IO.File]::Exists($path)){return @()}
+function Read-SavedJson($path,$secret){
  $bytes=[IO.File]::ReadAllBytes($path);if($secret){$bytes=[Security.Cryptography.ProtectedData]::Unprotect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)}
  return @(ConvertFrom-Json -InputObject $utf.GetString($bytes))
+}
+function Load-Json($name,$secret=$false){
+ $path=Join-Path $Store $name;$backup=$path+'.bak'
+ if(![IO.File]::Exists($path) -and !($name -eq 'mail-accounts.dpapi' -and [IO.File]::Exists($backup))){return @()}
+ try{return @(Read-SavedJson $path $secret)}catch{
+  if($name -ne 'mail-accounts.dpapi' -or ![IO.File]::Exists($backup)){throw}
+  try{$recovered=@(Read-SavedJson $backup $secret)}catch{throw 'Akun email tersimpan belum dapat dibaca untuk akun Windows ini. File tetap dipertahankan; jangan menambahkan ulang sebelum memeriksa akun Windows dan folder data.'}
+  if([IO.File]::Exists($path)){[IO.File]::Copy($path,$path+'.unreadable-'+[Guid]::NewGuid().ToString(),$false)}
+  [IO.File]::Copy($backup,$path,$true);return $recovered
+ }
 }
 function Metadata($accounts){return @($accounts|ForEach-Object { @{id=$_.id;label=$_.label;email=$_.email;host=$_.host;port=993} })}
 function Check-Root($root){

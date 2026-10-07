@@ -57,6 +57,7 @@ jobs:
         run: |
           python3 pack-frontend.py
           bash build.sh
+          python3 tests/embedded-ui.py DITASHA-Workspace.exe assets/index.html
           x86_64-w64-mingw32-gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-windows.c -o tests/update-windows.exe -ladvapi32
           x86_64-w64-mingw32-gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unknown-pragmas -isystem vendor tests/chatgpt-windows.c -municode -o tests/chatgpt-windows.exe -lole32 -lshell32 -luser32 -lgdi32 -lwinhttp -lcrypt32 -lbcrypt -lws2_32 -lcomdlg32
           sha256sum DITASHA-Workspace.exe > DITASHA-Workspace.exe.sha256
@@ -158,6 +159,8 @@ jobs:
         run: |
           & .\tests\mail-automation.ps1 -Source .\src\assistant-tools.ps1 -TestSchedule
           if (-not $?) { throw 'Mail automation tests failed' }
+          & .\tests\email-persistence.ps1 -Source .\src\assistant-tools.ps1
+          if (-not $?) { throw 'Email persistence tests failed' }
       - name: Verify Microsoft bootstrapper signature
         shell: pwsh
         run: |
@@ -217,6 +220,8 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
+          Fixes the packaged office layout and adds a real 3D Sakura room with furniture, moving employees and a 2D fallback. Shows saved email accounts above the add-account form, with encrypted account-vault recovery and Windows restart/update persistence tests. The release checks that the EXE embeds the exact checked frontend.
+
           Adds chat beside the office using the same saved conversations and team workflow. Smaller windows have office/chat tabs. Sakura studio adds Japanese-inspired wood, flooring and windows, with adult anime-inspired 3D employees, eight walking poses and alternating work poses.
 
           Fits the office and dashboard inside the application window. The full office floor scales with the available space, with a compact employee rail and picker. Navigation and the chat composer remain visible; long messages, task lists and settings scroll within their own panels. Browser layout checks cover 1024x600, 1280x720 and 1440x900, ten and eighteen employees, long chats and an active six-member board.

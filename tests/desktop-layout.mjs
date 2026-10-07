@@ -6,9 +6,10 @@ const {chromium}=await import(process.env.DITASHA_PLAYWRIGHT_IMPORT||'playwright
 const root=resolve('frontend/dist'),output=process.env.DITASHA_UI_OUTPUT||'desktop-preview';mkdirSync(output,{recursive:true});
 const server=createServer((req,res)=>{try{const pathname=new URL(req.url,'http://local').pathname,p=resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!p.startsWith(root+'/'))throw new Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'})[extname(p)]||'application/octet-stream');res.end(readFileSync(p));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.DITASHA_CHROME_EXECUTABLE||undefined,args:['--no-sandbox']});
+const browser=await chromium.launch({headless:true,executablePath:process.env.DITASHA_CHROME_EXECUTABLE||undefined,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 async function frameFits(page){assert.deepEqual(await page.evaluate(()=>({x:document.documentElement.scrollWidth>innerWidth,y:document.documentElement.scrollHeight>innerHeight,scroll:document.scrollingElement.scrollTop})),{x:false,y:false,scroll:0});}
-async function floorFits(page){await page.waitForFunction(()=>{const scene=document.querySelector('.fit-office .shared-scene'),v=document.querySelector('.fit-office .office-viewport');if(!scene||!v)return false;const s=scene.getBoundingClientRect(),b=v.getBoundingClientRect();return b.height>100&&s.left>=b.left-1&&s.right<=b.right+1&&s.top>=b.top-1&&s.bottom<=b.bottom+1;});assert.equal(await page.locator('.fit-office .office-viewport').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false);await frameFits(page);}
+async function floorFits(page){await page.waitForFunction(()=>{const v=document.querySelector('.fit-office .office-viewport');if(!v)return false;const b=v.getBoundingClientRect(),canvas=v.querySelector('.office-3d-render[data-scene-ready=true] canvas');if(canvas){const c=canvas.getBoundingClientRect();return b.height>100&&Math.abs(c.width-b.width)<2&&Math.abs(c.height-b.height)<2;}const scene=v.querySelector('.shared-scene');if(!scene)return false;const s=scene.getBoundingClientRect();return b.height>100&&s.left>=b.left-1&&s.right<=b.right+1&&s.top>=b.top-1&&s.bottom<=b.bottom+1;});assert.equal(await page.locator('.fit-office .office-viewport').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false);await frameFits(page);}
+
 try{
  for(const custom of [0,8]){
   const page=await browser.newPage({viewport:{width:1280,height:720}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -17,21 +18,23 @@ try{
    const status={provider:'openrouter',connected:false,permitted:false,models:[],accounts:[],general:'',coding:'',active:''};
    window.chrome={webview:{addEventListener:(_,fn)=>callback=fn,postMessage:message=>{const [op,id,...rest]=message.split('\n'),payload=rest.join('\n');let data=true;
     if(op==='load')data=stored;else if(op==='save')stored=JSON.parse(payload);else if(op==='hasKey')data=true;else if(op==='apiKeyStatus')data={provider:'openrouter',keys:{openrouter:true,groq:false,gemini:false,openai:false,custom:false}};
-    else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.16.0',status:'Ready',version:'',ready:false,automatic:true};
-    else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
+    else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.17.0',status:'Ready',version:'',ready:false,automatic:true};
+    else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[{id:'saved-one',label:'Personal',email:'one@example.test',host:'imap.example.test'},{id:'saved-two',label:'Work',email:'two@example.test',host:'imap.example.test'}],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
     else if(op==='aiEmployee'){const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON')){if(!window.__completeFixture)return;data={choices:[{message:{content:'Completed inline office chat test.'}}]};queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));return;}data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:(window.__completeFixture?['writer']:['writer','planner','developer','designer','web','finance']).map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
     queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));
    }}};
   },custom);
-  await page.goto(base);await page.locator('.fit-office .office-worker').last().waitFor();assert.equal(await page.locator('.fit-office .office-worker').count(),10+custom);
+  await page.goto(base);await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').last().waitFor();assert.equal(await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').count(),10+custom);
   for(const viewport of [{width:1280,height:720},{width:1024,height:600},{width:1440,height:900}]){
    await page.setViewportSize(viewport);try{await floorFits(page);}catch(e){await page.screenshot({path:join(output,'failed-office.png')});console.log(await page.locator('.office-workbench,.office-page,.fit-office,.office-viewport,.shared-scene').evaluateAll(es=>es.map(e=>({class:e.className,rect:e.getBoundingClientRect().toJSON()}))));throw e;}
+   assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Real 3D room renders');
    if(custom===0)await page.screenshot({path:join(output,'office-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Beranda',exact:true}).click();await page.locator('.home-team-list').waitFor();await frameFits(page);
    assert.equal(await page.locator('.home-dashboard').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false,'Home fits without page scrolling');
    if(custom===0)await page.screenshot({path:join(output,'home-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();await floorFits(page);
   }
+  await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();await floorFits(page);
   await page.getByRole('checkbox',{name:'Gerak karakter'}).uncheck();
   await page.evaluate(()=>window.__completeFixture=true);
   await page.getByRole('button',{name:'Chat baru di kantor'}).click();
@@ -51,7 +54,9 @@ try{
   await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.fit-office .board-task').length===6);await floorFits(page);
   await page.setViewportSize({width:1024,height:600});await floorFits(page);if(custom===0)await page.screenshot({path:join(output,'office-working-1024.png')});
   await page.getByRole('button',{name:'Pengaturan',exact:true}).click();await page.locator('.settings-page').waitFor();await frameFits(page);assert(await page.locator('.settings-page').evaluate(e=>e.scrollHeight>e.clientHeight));
+  await page.getByRole('button',{name:'Keuangan, email & file',exact:true}).click();await page.getByRole('button',{name:'Lora Email',exact:true}).click();await page.locator('.saved-account-list button').last().waitFor();assert.equal(await page.locator('.saved-account-list button').count(),2);assert(await page.getByText('one@example.test',{exact:true}).first().isVisible());await frameFits(page);
+  await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();await floorFits(page);await page.getByRole('button',{name:'Keuangan, email & file',exact:true}).click();await page.getByRole('button',{name:'Lora Email',exact:true}).click();await page.locator('.saved-account-list button').last().waitFor();assert.equal(await page.locator('.saved-account-list button').count(),2,'Saved accounts load again after remount');
   assert.deepEqual(errors,[]);await page.close();
  }
- console.log('Desktop layout passed: fixed frame at 1024/1280/1440, complete 10/18-person office, dashboard, long chat composer, working board and settings panels.');
+ console.log('Desktop layout passed: fixed frame at 1024/1280/1440, complete 10/18-person office, dashboard, long chat composer, working board, settings panels, real 3D rendering and saved email accounts.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}
