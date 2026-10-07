@@ -36,3 +36,5 @@ END
 103 RCDATA "index.html"
 
 104 RCDATA "../src/assistant-tools.ps1"
+
+105 RCDATA "../src/mail-automation.ps1"

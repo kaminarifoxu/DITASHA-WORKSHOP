@@ -86,3 +86,7 @@ Version 3.12.1: operational employees
 Version 3.12.1: all ten employees now use one consistent chibi vector character system in office, chat, team cards, and the avatar picker. Hair, clothing, glasses and accessories preserve each identity. Shared head/body proportions stay fixed across idle, walk and work; walking alternates legs/arms and working adds a tablet. Previous raster sprite atlases are no longer used by the frontend.
 
 Version 3.13.0: replaces chibi characters with a shared Three.js 3D rig, adult proportions (about 7.4 head heights), lit faceted geometry, distinct hair/clothing/accessories and fixed cameras across five poses. Models render locally through Three.js SVGRenderer with cached SVG sprites, so no GPU contexts or network character assets are needed. Lora’s panel now includes Gmail 2-Step Verification, App Password and IMAP setup steps.
+
+VERSION 3.14.0
+Lora: connect accounts, enable the 20-minute Windows schedule, and run the first check. The PC must be awake, online and signed in; the app may be closed. Mail is grouped locally without API cost or changes to Gmail. Inbox backlogs resume 20 messages per account at a time.
+Achi: money emails arrive in a review queue and Reports/Lora-Achi.xlsx. Check bills/receipts, confirm actual transactions, then import confirmed IDR records once into the ledger. Other currencies stay in Excel. No automatic transfers. Close Excel before refreshing a locked report. Attachments and other folders are not processed.

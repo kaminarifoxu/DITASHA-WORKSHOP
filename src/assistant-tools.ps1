@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory=$true)][string]$Store)
+﻿param([Parameter(Mandatory=$true)][string]$Store,[switch]$Automatic)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 [Console]::InputEncoding=New-Object Text.UTF8Encoding($false)
@@ -69,6 +69,9 @@ function Email($account,$action,$uid){
   $ssl=New-Object Net.Security.SslStream($tcp.GetStream(),$false);$ssl.ReadTimeout=20000;$ssl.WriteTimeout=20000;$ssl.AuthenticateAsClient($account.host,$null,[Security.Authentication.SslProtocols]::Tls12,$true)
   $greet=Imap-Line $ssl;if($greet -notmatch '^\* OK'){throw 'Server IMAP tidak siap.'}
   $null=Imap-Command $ssl ('LOGIN '+(Imap-Quote $account.email)+' '+(Imap-Quote $account.password));$examine=Imap-Command $ssl 'EXAMINE INBOX'
+  if($action -eq 'emailScan'){
+   return (Email-ScanStream $ssl $examine $uid)
+  }
   if($action -eq 'emailRead'){if([string]$uid -notmatch '^[1-9][0-9]{0,12}$'){throw 'ID email tidak valid.'};$fetch=Imap-Command $ssl ('UID FETCH '+$uid+' (BODY.PEEK[]<0.48000>)');$raw=$fetch.literals -join "`n";return @{uid=$uid;subject=(Header $raw 'Subject');from=(Header $raw 'From');date=(Header $raw 'Date');content=(Mail-Preview $raw);preview=$true}}
   $search=Imap-Command $ssl 'UID SEARCH ALL';$line=@($search.lines|Where-Object {$_ -match '^\* SEARCH'}) -join ' ';$ids=@(($line -replace '^\* SEARCH\s*','').Split(' ')|Where-Object {$_ -match '^\d+$'})
   $unread=Imap-Command $ssl 'UID SEARCH UNSEEN';$unreadLine=@($unread.lines|Where-Object {$_ -match '^\* SEARCH'}) -join ' ';$unreadIds=@(($unreadLine -replace '^\* SEARCH\s*','').Split(' ')|Where-Object {$_ -match '^\d+$'})
@@ -76,8 +79,11 @@ function Email($account,$action,$uid){
   return @{messages=@($messages);total=$ids.Count;unread=$unreadIds.Count;checkedAt=[DateTime]::UtcNow.ToString('o')}
  }finally{if($ssl){$ssl.Dispose()};$tcp.Close()}
 }
+. (Join-Path $PSScriptRoot 'mail-automation.ps1')
+$mailMutex=$null;$mailLocked=$false
 try{
- $request=ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd());$action=[string]$request.action
+ $request=if($Automatic){[pscustomobject]@{action='mailAutomatic'}}else{ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())};$action=[string]$request.action
+ if($action -like 'mail*'){$mailMutex=New-Object Threading.Mutex($false,('Local\DITASHA-Mail-'+(Mail-Hash $Store).Substring(0,12)));try{$mailLocked=$mailMutex.WaitOne(30000)}catch [Threading.AbandonedMutexException]{$mailLocked=$true};if(!$mailLocked){throw 'Lora sedang memeriksa email. Coba lagi setelah selesai.'}}
  $accounts=@(Load-Json 'mail-accounts.dpapi' $true);$roots=@(Load-Json 'file-roots.json')
  switch($action){
   'status' {$result=@{accounts=@(Metadata $accounts);roots=@($roots)}}
@@ -88,6 +94,25 @@ try{
   }
   'emailRemove' {if(!($accounts.id -contains $request.id)){throw 'Akun tidak ditemukan.'};$accounts=@($accounts|Where-Object {$_.id -ne $request.id});Save-Json 'mail-accounts.dpapi' $accounts $true;$result=@{accounts=@(Metadata $accounts)}}
   {$_ -in @('emailCheck','emailRead')} {$a=$accounts|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$a){throw 'Akun tidak ditemukan.'};$result=Email $a $action $request.uid}
+  'mailStatus' {$result=Mail-View (Mail-State) $request.page $request.mailPage $(if($request.category){$request.category}else{'Semua'}) $(if($request.review){$request.review}else{'Semua'})}
+  'mailPayment' {$state=Mail-State;$result=$state.records|Where-Object {$_.id -eq $request.id -and $_.category -eq 'Keuangan'}|Select-Object -First 1;if(!$result){throw 'Email pembayaran tidak ditemukan.'}}
+  'mailSchedule' {$state=Mail-State;Mail-Schedule ($request.enabled -eq $true);$state.enabled=($request.enabled -eq $true);Mail-Save $state;$result=Mail-View $state}
+  {$_ -in @('mailScan','mailAutomatic')} {$state=Mail-State;if($action -eq 'mailAutomatic' -and !$state.enabled){$result=@{skipped=$true}}else{$result=Mail-Scan $state $accounts}}
+  'mailExport' {$state=Mail-State;$path=Mail-Export $state;Mail-Save $state;$result=@{path=$path}}
+  'mailReportOpen' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){throw 'Laporan belum tersedia. Jalankan pemeriksaan email dahulu.'};Start-Process -FilePath $path;$result=@{opened=$true}}
+  'mailReview' {
+   $state=Mail-State;$record=$state.records|Where-Object {$_.id -eq $request.id -and $_.category -eq 'Keuangan'}|Select-Object -First 1;if(!$record){throw 'Email pembayaran tidak ditemukan.'}
+   if($record.review -eq 'recorded'){throw 'Pembayaran sudah dicatat di ledger.'}
+   if($request.review -notin @('confirmed','excluded','pending','recorded')){throw 'Status review tidak valid.'}
+   if($request.review -eq 'recorded'){if($record.review -ne 'confirmed'){throw 'Konfirmasi pembayaran dahulu.'};if([string]$request.ledgerId -ne ('mail-'+$record.id)){throw 'ID ledger tidak valid.'};$record.ledgerId=$request.ledgerId}
+   elseif($request.review -eq 'confirmed'){
+    if($request.kind -notin @('income','expense') -or [string]$request.currency -notmatch '^[A-Z]{3}$' -or $null -eq $request.amount -or [decimal]$request.amount -le 0 -or [decimal]$request.amount -gt 1000000000000 -or ([decimal]$request.amount*100)%1 -ne 0){throw 'Jumlah, mata uang atau jenis transaksi tidak valid.'}
+    if($request.currency -eq 'IDR' -and ([decimal]$request.amount)%1 -ne 0){throw 'Jumlah IDR harus Rupiah utuh.'}
+    $parsed=[DateTime]::MinValue;if(![DateTime]::TryParseExact([string]$request.date,'yyyy-MM-dd',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::None,[ref]$parsed)){throw 'Tanggal transaksi tidak valid.'}
+    $record.amount=[decimal]$request.amount;$record.currency=[string]$request.currency;$record.kind=$request.kind;$record.transactionDate=$request.date;$record.paymentType=if($request.kind -eq 'income'){'Pemasukan terkonfirmasi'}else{'Pengeluaran terkonfirmasi'};$record.reason='Dikonfirmasi pengguna untuk pencatatan. Tidak ada transfer uang.'
+   }
+   $record.review=$request.review;Mail-Save $state;try{$null=Mail-Export $state}catch{$state.exportError='Tutup laporan Excel lalu ekspor kembali.'};Mail-Save $state;$result=Mail-View $state
+  }
   'folderAdd' {$path=[IO.Path]::GetFullPath([string]$request.path);$item=Get-Item -LiteralPath $path -Force;if(!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Pilih folder biasa, bukan link.'};Check-Root @{path=$path};if($roots.Count -ge 20){throw 'Maksimal 20 folder.'};if($roots.path -notcontains $path){$roots+=@{id=[Guid]::NewGuid().ToString();path=$path};Save-Json 'file-roots.json' $roots};$result=@{roots=@($roots)}}
   'folderRemove' {$roots=@($roots|Where-Object {$_.id -ne $request.id});Save-Json 'file-roots.json' $roots;$result=@{roots=@($roots)}}
   'fileList' {
@@ -115,3 +140,5 @@ try{
  if($message.Length -gt 250){$message='Operasi belum berhasil. Periksa izin folder atau konfigurasi email.'}
  [Console]::Out.Write((ConvertTo-Json -InputObject @{ok=$false;error=$message} -Compress))
 }
+
+finally{if($mailLocked){$mailMutex.ReleaseMutex()};if($mailMutex){$mailMutex.Dispose()}}

@@ -1,7 +1,7 @@
-param([string]$Source)
+﻿param([string]$Source)
 $ErrorActionPreference='Stop'
 $sourceText=[IO.File]::ReadAllText($Source)
-$cut=$sourceText.IndexOf("try{`n `$request=")
+$cut=$sourceText.IndexOf(". (Join-Path `$PSScriptRoot")
 if($cut -lt 0){throw 'Cannot locate main request boundary'}
 $functions=$sourceText.Substring($sourceText.IndexOf("`$ErrorActionPreference"),$cut-$sourceText.IndexOf("`$ErrorActionPreference"))
 Invoke-Expression $functions
@@ -16,8 +16,8 @@ Add-Type @'
 using System;using System.IO;
 public class ImapTestStream:Stream {
  MemoryStream input;public MemoryStream sent=new MemoryStream();public ImapTestStream(byte[] bytes){input=new MemoryStream(bytes);}
- public override bool CanRead=>true;public override bool CanWrite=>true;public override bool CanSeek=>false;public override long Length=>input.Length;public override long Position{get=>input.Position;set=>throw new NotSupportedException();}
- public override int Read(byte[] b,int o,int n)=>input.Read(b,o,Math.Min(n,3));public override int ReadByte()=>input.ReadByte();public override void Write(byte[] b,int o,int n)=>sent.Write(b,o,n);public override void Flush(){}public override long Seek(long a,SeekOrigin b)=>throw new NotSupportedException();public override void SetLength(long a)=>throw new NotSupportedException();
+ public override bool CanRead{get{return true;}}public override bool CanWrite{get{return true;}}public override bool CanSeek{get{return false;}}public override long Length{get{return input.Length;}}public override long Position{get{return input.Position;}set{throw new NotSupportedException();}}
+ public override int Read(byte[] b,int o,int n){return input.Read(b,o,Math.Min(n,3));}public override int ReadByte(){return input.ReadByte();}public override void Write(byte[] b,int o,int n){sent.Write(b,o,n);}public override void Flush(){}public override long Seek(long a,SeekOrigin b){throw new NotSupportedException();}public override void SetLength(long a){throw new NotSupportedException();}
 }
 '@
 $script:tag=0;$literal="Subject: Hello`r`nFrom: test@example.com`r`n`r`n";$bytes=$utf.GetBytes("* 1 FETCH (BODY[HEADER] {$($utf.GetByteCount($literal))}`r`n"+$literal+")`r`nD1 OK fetched`r`n")

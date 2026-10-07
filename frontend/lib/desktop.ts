@@ -64,6 +64,18 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
  }
  return mutate(async()=>{
   const next=structuredClone(state!),now=Date.now(),id=crypto.randomUUID();
+  if(url==='/api/money/import-mail'){
+   if(typeof body.id!=='string'||!/^[a-f0-9]{64}$/.test(body.id))throw new Error('ID email pembayaran tidak valid.');
+   const payment=await native('assistantTools',JSON.stringify({action:'mailPayment',id:body.id}),210000);
+   if(!payment||!['confirmed','recorded'].includes(payment.review)||payment.currency!=='IDR'||!Number.isSafeInteger(payment.amount)||payment.amount<=0)throw new Error('Konfirmasi pembayaran dalam IDR dahulu. Mata uang lain tetap di laporan Excel.');
+   const money=validateMoney(next.money),ledgerId='mail-'+payment.id;
+   if(!money.transactions.some(t=>t.id===ledgerId)){
+    money.transactions.push({id:ledgerId,date:payment.transactionDate,kind:payment.kind,amount:payment.amount,category:'Email · Achi',note:(payment.subject+' · '+payment.account).slice(0,500)});
+    next.money=validateMoney(money);await save(next);
+   }
+   let synced=true;try{if(payment.review!=='recorded')await native('assistantTools',JSON.stringify({action:'mailReview',id:payment.id,review:'recorded',ledgerId}),210000);}catch{synced=false;}
+   return {money:validateMoney(next.money),synced};
+  }
   if(url==='/api/money'){
    const money=validateMoney(next.money);if(body.action==='add'){if(money.transactions.length>=10000)throw new Error('Maksimal 10.000 transaksi.');money.transactions.push({id,date:body.date,kind:body.kind,amount:body.amount,category:body.category,note:body.note||''});}
    else if(body.action==='delete'){if(!money.transactions.some(t=>t.id===body.id))throw new Error('Transaksi tidak ditemukan.');money.transactions=money.transactions.filter(t=>t.id!==body.id);}

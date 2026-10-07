@@ -5,6 +5,7 @@ globalThis.DOMParser=testRequire('@xmldom/xmldom').DOMParser;
 let providerKeys={groq:false,gemini:false,openai:false,custom:false};
 let chatgptStatus={provider:'openrouter',connected:false,permitted:false,models:[]};
 let listener,stored=null,key=false,lastOp,lastMessages,failAI=false,failSave=false,dispatchTarget='general',badDispatch=false,failWorker=false,dispatchPrompt='',failTrends=false,handoffTarget='writer';
+let mailPayments=[],failMailAck=false;
 const toolCalls=[];
 const aiCalls=[];let activeAI=0,peakAI=0;
 const feedXML='<rss xmlns:ht="https://trends.google.com/trending/rss"><channel><item><title>FiveM community update</title><pubDate>Wed, 07 Oct 2026 00:00:00 GMT</pubDate><ht:approx_traffic>1000+</ht:approx_traffic><ht:news_item><ht:news_item_title>Community story</ht:news_item_title><ht:news_item_url>https://example.com/story</ht:news_item_url><ht:news_item_source>Example</ht:news_item_source></ht:news_item></item></channel></rss>';
@@ -18,7 +19,7 @@ globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},post
   else if(op==='apiKeyStatus')data={provider:chatgptStatus.provider,keys:{openrouter:key,...providerKeys}};
   else if(op==='saveKey')key=true;
   else if(op==='save'){if(failSave)throw new Error('Disk full');stored=JSON.parse(payload);}
-  else if(op==='assistantTools'){const r=JSON.parse(payload);toolCalls.push(r);if(r.action==='status')data={accounts:[{id:'mail-1',email:'test@example.com'}],roots:[{id:'root-1',path:'C:\\Allowed'}]};else if(r.action==='emailCheck')data={messages:[{uid:'8',subject:'Meeting',from:'test@example.com'}],unread:1,checkedAt:'2026-10-07T00:00:00Z'};else if(r.action==='fileList')data={files:[{path:'notes.txt',size:4}],truncated:false};else throw new Error('Unexpected tool operation');}
+  else if(op==='assistantTools'){const r=JSON.parse(payload);toolCalls.push(r);if(r.action==='status')data={accounts:[{id:'mail-1',email:'test@example.com'}],roots:[{id:'root-1',path:'C:\\Allowed'}]};else if(r.action==='emailCheck')data={messages:[{uid:'8',subject:'Meeting',from:'test@example.com'}],unread:1,checkedAt:'2026-10-07T00:00:00Z'};else if(r.action==='mailStatus')data={payments:mailPayments};else if(r.action==='mailPayment')data=mailPayments.find(p=>p.id===r.id);else if(r.action==='mailReview'){if(failMailAck)throw new Error('Mail store busy');const payment=mailPayments.find(p=>p.id===r.id);payment.review='recorded';data={payments:mailPayments};}else if(r.action==='fileList')data={files:[{path:'notes.txt',size:4}],truncated:false};else throw new Error('Unexpected tool operation');}
   else if(op==='trends'){if(failTrends)throw new Error('Trends offline');data={rss:feedXML,source:'https://trends.google.com/trending/rss?geo=ID'};}
   else if(op==='ai'||op==='aiCoding'||op==='aiEmployee'){const route=JSON.parse(payload);lastOp=op==='aiEmployee'?(route.coding?'aiCoding':'ai'):op;lastMessages=op==='aiEmployee'?route.messages:route;aiCalls.push({op:lastOp,messages:lastMessages,route:op==='aiEmployee'?route:null});if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.startsWith('You are Mika')){data={choices:[{message:{content:JSON.stringify({analysis:'Google search trends; source https://example.com/story',handoff_employee_id:handoffTarget,brief:'Write a caption based on the supplied trend'})}}]};}else if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
  }catch(error){ok=false;data={error:error.message};}
@@ -214,3 +215,13 @@ for(const [name,id,text,operation] of [['Lora','email','cek inbox email','emailC
 }
 assert(!toolCalls.some(c=>['emailRead','fileRead','fileMove'].includes(c.action)),'Chat metadata checks do not read content or change files');
 console.log('Passed: Lora inbox and Dante inventory checks provide real tool evidence to AI without automatic content reads or modifications.');
+
+const mailId='a'.repeat(64);mailPayments=[{id:mailId,review:'pending',currency:'IDR',amount:125000,transactionDate:'2026-10-07',kind:'expense',subject:'Hosting receipt',account:'one@example.test'}];
+await assert.rejects(afterRestart.api('/api/money/import-mail',{id:mailId}),/Konfirmasi/);
+mailPayments[0].review='confirmed';mailPayments[0].currency='USD';await assert.rejects(afterRestart.api('/api/money/import-mail',{id:mailId}),/IDR/);mailPayments[0].currency='IDR';
+const mailBefore=await afterRestart.exportBackup();failSave=true;await assert.rejects(afterRestart.api('/api/money/import-mail',{id:mailId}),/Disk/);failSave=false;assert.equal(await afterRestart.exportBackup(),mailBefore);assert.equal(mailPayments[0].review,'confirmed');
+failMailAck=true;const partial=await afterRestart.api('/api/money/import-mail',{id:mailId});assert.equal(partial.synced,false);assert.equal(partial.money.transactions.filter(t=>t.id==='mail-'+mailId).length,1);
+failMailAck=false;const retry=await afterRestart.api('/api/money/import-mail',{id:mailId});assert.equal(retry.synced,true);assert.equal(retry.money.transactions.filter(t=>t.id==='mail-'+mailId).length,1);assert.equal(mailPayments[0].review,'recorded');
+const again=await afterRestart.api('/api/money/import-mail',{id:mailId});assert.equal(again.money.transactions.filter(t=>t.id==='mail-'+mailId).length,1);
+mailPayments=[{...mailPayments[0],id:'b'.repeat(64),review:'confirmed',transactionDate:'2026-02-30'}];await assert.rejects(afterRestart.api('/api/money/import-mail',{id:'b'.repeat(64)}),/tidak valid/);
+console.log('Passed: reviewed IDR-only email ledger import, authoritative native evidence, disk failure preservation and duplicate-safe retry after partial handoff failure.');

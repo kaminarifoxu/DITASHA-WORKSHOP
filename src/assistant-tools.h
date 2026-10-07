@@ -38,7 +38,8 @@ static BOOL tools_operation(App *app,const WCHAR *operation,unsigned long id,con
  if(InterlockedCompareExchange(&tools_busy,1,0)){fail_reply(app,id,"Tunggu operasi alat sebelumnya selesai.");return TRUE;}
  ToolsJob *job=calloc(1,sizeof(ToolsJob));BOOL ok=FALSE;
  if(job){job->window=app->window;job->id=id;job->payload=to_utf8(payload);HRSRC resource=FindResourceW(instance,MAKEINTRESOURCEW(104),RT_RCDATA);DWORD size=resource?SizeofResource(instance,resource):0;const void *script=resource?LockResource(LoadResource(instance,resource)):NULL;
-  if(script&&size&&job->payload&&strlen(job->payload)<=4096&&json_root(job->payload,JSMN_OBJECT)&&write_local(L"assistant-tools.ps1",script,size,FALSE)){local_path(L"assistant-tools.ps1",job->script);HANDLE thread=CreateThread(NULL,0,tools_worker,job,0,NULL);if(thread){CloseHandle(thread);ok=TRUE;}}
+  HRSRC helper=FindResourceW(instance,MAKEINTRESOURCEW(105),RT_RCDATA);DWORD helperSize=helper?SizeofResource(instance,helper):0;const void *helperBytes=helper?LockResource(LoadResource(instance,helper)):NULL;
+  if(helperBytes&&helperSize&&write_local(L"mail-automation.ps1",helperBytes,helperSize,FALSE)&&script&&size&&job->payload&&strlen(job->payload)<=4096&&json_root(job->payload,JSMN_OBJECT)&&write_local(L"assistant-tools.ps1",script,size,FALSE)){local_path(L"assistant-tools.ps1",job->script);HANDLE thread=CreateThread(NULL,0,tools_worker,job,0,NULL);if(thread){CloseHandle(thread);ok=TRUE;}}
  }
  if(!ok){if(job){cg_clear(job->payload);free(job);}InterlockedExchange(&tools_busy,0);fail_reply(app,id,"Alat desktop belum dapat dijalankan.");}return TRUE;
 }

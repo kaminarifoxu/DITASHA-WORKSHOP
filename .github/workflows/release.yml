@@ -80,9 +80,15 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: windows-test-package
+      - name: Test Lora automation and actual Windows schedule
+        shell: powershell
+        run: |
+          & .\tests\mail-automation.ps1 -Source .\src\assistant-tools.ps1 -TestSchedule
+          if ($LASTEXITCODE -ne 0) { throw 'Mail automation tests failed' }
       - name: Verify Microsoft bootstrapper signature
         shell: pwsh
         run: |
@@ -134,6 +140,8 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
+          Adds Lora's 20-minute Windows background mail sorting, resumable read-only IMAP scans, local categories and an automatically updated Excel payment report. Achi receives a payment review queue with conservative amount/currency extraction and confirmed, duplicate-safe IDR ledger imports. No email moves or automatic money transfers. PC must be awake, online and signed in; attachments are not processed.
+
           Replaces the chibi characters with shared, shaded 3D employee models using adult proportions. Adds an in-app Gmail connection guide for Lora. All 50 character poses render with valid geometry.
 
           The previous update remade all ten employees in one consistent chibi style with fixed proportions and shared idle, walking and working animations. Adds Achi for IDR income/expenses/budgets, Lora for multiple Gmail/IMAP inboxes and reply drafts, and Dante for selected-folder inventories, text previews and reviewed rename/move actions. Email credentials stay encrypted on the PC; no automatic email sending, file deletion or overwriting.
