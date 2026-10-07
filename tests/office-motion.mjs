@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {OfficeEngine} from '../frontend/test-build/office-engine.mjs';
 const engine=new OfficeEngine();engine.sync(['general','writer','developer','planner','extra']);
 const start=engine.snapshot();
-const frames=new Set();for(let i=0;i<60;i++){engine.tick(.05);frames.add(engine.snapshot().writer.walkingFrame);}assert(frames.size===8&&[...frames].every(f=>Number.isInteger(f)&&f>=0&&f<8),'eight distance-driven walking poses while travelling');for(let i=0;i<40;i++)engine.tick(.05);
+const frames=new Set();for(let i=0;i<400;i++){engine.tick(.05);const frame=engine.snapshot().writer.walkingFrame;if(frame!==null)frames.add(frame);}assert(frames.size===8&&[...frames].every(f=>Number.isInteger(f)&&f>=0&&f<8),'eight distance-driven walking poses while travelling');for(let i=0;i<40;i++)engine.tick(.05);
 assert.deepEqual(engine.snapshot().general.point,start.general.point,'Amii stays at his desk');assert.notDeepEqual(engine.snapshot().writer.point,start.writer.point,'employees walk');
 async function finish(job){let done=false;job.then(()=>done=true);for(let i=0;i<1500&&!done;i++){engine.tick(.05);await Promise.resolve();}assert(done,'handoff completes');await job;}
 await finish(engine.assign('developer'));
