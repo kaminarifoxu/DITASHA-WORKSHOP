@@ -87,6 +87,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Install Android SDK inputs
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Preserve personal preview signing key
@@ -104,6 +107,27 @@ jobs:
           path: |
             android-companion/build/DITASHA-Companion.apk
             android-companion/build/DITASHA-Companion.apk.sha256
+          retention-days: 7
+  phone-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install browser test driver
+        run: npm install --prefix /tmp/ditasha-ui --no-audit --no-fund playwright@1.62.1
+      - name: Test phone interface with real server
+        env:
+          DITASHA_PLAYWRIGHT_IMPORT: /tmp/ditasha-ui/node_modules/playwright/index.mjs
+          DITASHA_CHROME_EXECUTABLE: /usr/bin/google-chrome
+          DITASHA_UI_OUTPUT: phone-preview
+        run: node sync-server/test/phone-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-preview
+          path: phone-preview/*.png
           retention-days: 7
   windows-tests:
     needs: build
@@ -146,7 +170,7 @@ jobs:
             Write-Warning 'Live trends feed unavailable on this runner; app reports an error and does not invent trends.'
           }
   release:
-    needs: [build, windows-tests, android]
+    needs: [build, windows-tests, android, phone-ui]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
