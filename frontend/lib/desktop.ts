@@ -59,7 +59,8 @@ async function ready(){
 async function save(next:State){await native('save',JSON.stringify(next));state=next;}
 function field(value:unknown,max:number,label:string){if(typeof value!=='string'||!value.trim()||value.length>max)throw new Error(label+' tidak valid.');return value.trim();}
 let writeQueue:Promise<unknown>=Promise.resolve();
-function mutate<T>(fn:()=>Promise<T>):Promise<T>{const job=writeQueue.then(fn,fn);writeQueue=job.catch(()=>{});return job;}
+let queuedWrites=0;
+function mutate<T>(fn:()=>Promise<T>):Promise<T>{queuedWrites++;const job=writeQueue.then(fn,fn);writeQueue=job.catch(()=>{});return job.finally(()=>{queuedWrites--;});}
 // Background mail sorting owns its archive; workspace writes remain serialized here.
 async function syncMailMoney(){
  return mutate(async()=>{
@@ -89,7 +90,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
  if(!body){
   const chatId=new URL(url,'https://ditasha.local').searchParams.get('chat');
   if(chatId)return {messages:state!.messages.filter(m=>m.chat_id===chatId).sort((a,b)=>a.created-b.created)};
-  let moneySyncError='';try{const result=await syncMailMoney();if(result.pendingAck)moneySyncError='Ledger tersimpan; status email akan disinkronkan ulang.';}catch(error){moneySyncError=(error as Error).message;}
+  let moneySyncError='';try{if(!queuedWrites){const result=await syncMailMoney();if(result.pendingAck)moneySyncError='Ledger tersimpan; status email akan disinkronkan ulang.';}}catch(error){moneySyncError=(error as Error).message;}
   const [chatgpt,keyStatus]:[ChatGPTInfo,KeyStatus]=await Promise.all([native('chatgptStatus'),native('apiKeyStatus')]);
   const aiConfig=validateAIConfig(state!.ai),employees=[...agents,...state!.employees];
   let route;try{route=resolveEmployeeRoute(agents[0],aiConfig,keyStatus.provider,chatgpt);}catch{}

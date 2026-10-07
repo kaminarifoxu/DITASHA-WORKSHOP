@@ -5,7 +5,7 @@ globalThis.DOMParser=testRequire('@xmldom/xmldom').DOMParser;
 let providerKeys={groq:false,gemini:false,openai:false,custom:false};
 let chatgptStatus={provider:'openrouter',connected:false,permitted:false,models:[]};
 let listener,stored=null,key=false,lastOp,lastMessages,failAI=false,failSave=false,dispatchTarget='general',badDispatch=false,failWorker=false,dispatchPrompt='',failTrends=false,handoffTarget='writer';
-let mailPayments=[],failMailAck=false;
+let mailPayments=[],failMailAck=false,holdAI=false;const heldAI=[];
 let activeTools=0,peakTools=0;
 const toolCalls=[];
 const aiCalls=[];let activeAI=0,peakAI=0;
@@ -24,7 +24,7 @@ globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},post
   else if(op==='trends'){if(failTrends)throw new Error('Trends offline');data={rss:feedXML,source:'https://trends.google.com/trending/rss?geo=ID'};}
   else if(op==='ai'||op==='aiCoding'||op==='aiEmployee'){const route=JSON.parse(payload);lastOp=op==='aiEmployee'?(route.coding?'aiCoding':'ai'):op;lastMessages=op==='aiEmployee'?route.messages:route;aiCalls.push({op:lastOp,messages:lastMessages,route:op==='aiEmployee'?route:null});if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.startsWith('You are Mika')){data={choices:[{message:{content:JSON.stringify({analysis:'Google search trends; source https://example.com/story',handoff_employee_id:handoffTarget,brief:'Write a caption based on the supplied trend'})}}]};}else if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
  }catch(error){ok=false;data={error:error.message};}
- queueMicrotask(()=>{if(op==='assistantTools')activeTools--;if(op==='ai'||op==='aiCoding'||op==='aiEmployee')activeAI--;listener({data:{id:Number(id),ok,data}});});
+ const reply=()=>{if(op==='assistantTools')activeTools--;if(op==='ai'||op==='aiCoding'||op==='aiEmployee')activeAI--;listener({data:{id:Number(id),ok,data}});};if(holdAI&&['ai','aiCoding','aiEmployee'].includes(op))heldAI.push(reply);else queueMicrotask(reply);
 }}}};
 const {parseTrendFeed}=await import('../frontend/test-build/trends.mjs');
 assert.equal(parseTrendFeed(feedXML)[0].title,'FiveM community update');
@@ -249,6 +249,16 @@ assert.equal((await afterRestart.api('/api/money/sync-mail',{})).added,0,'Other 
 mailPayments=[];
 await Promise.all([afterRestart.native('assistantTools',JSON.stringify({action:'status'})),afterRestart.native('assistantTools',JSON.stringify({action:'mailLedgerEntries'}))]);assert.equal(peakTools,1,'Background and panel tools share the native single-process limit');
 console.log('Passed: automatic payment ledger handoff, failed save, acknowledgement retry, deduplication, deletion and separate currencies.');
+
+// Reading workspace/account panels must not wait for a provider response.
+const panelChat=await afterRestart.api('/api/workspace',{type:'chat',agent:'general'});
+holdAI=true;const longRequest=afterRestart.api('/api/chat',{chat_id:panelChat.id,content:'Explain this briefly'});
+while(!heldAI.length)await new Promise(r=>setImmediate(r));
+let panelSnapshot;
+try{panelSnapshot=await Promise.race([afterRestart.api('/api/workspace'),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Read panel blocked by AI task')),1000))]);}
+finally{holdAI=false;while(heldAI.length)heldAI.shift()();}
+assert(panelSnapshot.employees.length>=10);await longRequest;
+console.log('Passed: read-only panels remain available while AI holds the workspace write queue.');
 
 // Phone work must survive restart without repeating provider calls.
 const remoteId='11111111-1111-4111-8111-111111111111';
