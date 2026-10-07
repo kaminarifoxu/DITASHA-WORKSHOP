@@ -6,9 +6,12 @@ sdk_root=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}
 tools="$sdk_root/build-tools/35.0.0"
 platform="$sdk_root/platforms/android-35/android.jar"
 output_dir=${DITASHA_ANDROID_OUTPUT:-build}
+app_version=$(sed -n 's/^#define APP_VERSION "\([0-9.]*\)"/\1/p' ../src/version.h)
+IFS=. read -r version_major version_minor version_patch <<< "$app_version"
+version_code=$((version_major*10000+version_minor*100+version_patch))
 mkdir -p "$output_dir/generated" "$output_dir/classes" "$output_dir/dex"
 "$tools/aapt2" compile --dir res -o "$output_dir/res.zip"
-"$tools/aapt2" link -o "$output_dir/unsigned.apk" --manifest AndroidManifest.xml -I "$platform" --java "$output_dir/generated" --min-sdk-version 26 --target-sdk-version 35 --version-code 31500 --version-name 3.15.0 "$output_dir/res.zip"
+"$tools/aapt2" link -o "$output_dir/unsigned.apk" --manifest AndroidManifest.xml -I "$platform" --java "$output_dir/generated" --min-sdk-version 26 --target-sdk-version 35 --version-code "$version_code" --version-name "$app_version" "$output_dir/res.zip"
 find src "$output_dir/generated" -name '*.java' > "$output_dir/sources.txt"
 javac -encoding UTF-8 --release 8 -classpath "$platform" -d "$output_dir/classes" @"$output_dir/sources.txt"
 jar cf "$output_dir/classes.jar" -C "$output_dir/classes" .

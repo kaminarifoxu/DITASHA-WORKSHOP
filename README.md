@@ -124,3 +124,7 @@ Native tests cover read-only IMAP parsing, pagination and cursor resets, categor
 Windows can pair with your Debian VPS through outbound HTTPS. The Android companion and mobile website let you queue Amii tasks, view recent results, submit text/code files, download generated files and review Lora/Achi payment data. Your PC app runs the AI work while open. API keys and Gmail credentials stay on Windows.
 
 Download the Windows EXE, Android APK and server ZIP from Releases. See [Debian deployment and pairing instructions](sync-server/README.md). The default domain is `workspace.gremoryy.my.id`; other HTTPS origins are supported. The Android app is a personal preview for Android 8+, built and signature-checked in CI. VPS deployment and physical-device testing require your setup.
+
+## Fitted workspace (3.15.1)
+
+The office floor and compact dashboard fit inside the app window. The office scales automatically when the window or employee count changes, keeping all desks on screen. A side rail and employee picker provide readable task shortcuts. Chat scrolling stays inside the message panel, with navigation and the composer visible. Long histories, task lists and settings use internal scrolling.

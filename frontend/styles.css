@@ -56,3 +56,77 @@
 .payment-review{margin-top:20px;padding:20px;border:1px solid var(--border);border-radius:12px}
 .mail-automation .tool-error{white-space:pre-wrap;overflow-wrap:anywhere}
 .mail-automation .tool-note{overflow-wrap:anywhere}
+
+/* Keep the application frame fixed; only content panels scroll. */
+html,body,#root{height:100%;overflow:hidden}
+.workspace-frame{height:100dvh;min-height:0!important;overflow:hidden}
+.main{display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden}
+.main>.topbar{height:56px;min-height:56px;flex:none;padding:0 24px}
+.main>.error-banner{flex:none;max-height:110px;overflow:auto}
+.main>.page{flex:1;min-height:0;width:100%;margin:0 auto;padding:24px 30px;overflow:auto;overscroll-behavior:contain}
+.main>.office-page{display:flex;flex-direction:column;overflow:hidden;padding:16px 20px 10px;gap:8px;max-width:none}
+.office-page>.fit-office{flex:1;min-height:0;margin:0}
+.office-page>.office-disclaimer{flex:none;margin:0 4px;font-size:12px;line-height:1.5;color:#9cb5a8}
+.fit-office{display:grid;grid-template-columns:minmax(0,1fr) 180px;grid-template-rows:auto auto auto minmax(0,1fr)}
+.fit-office>.office-heading,.fit-office>.office-navigation,.fit-office>.task-board-panel{grid-column:1/-1}
+.fit-office>.office-heading{padding:12px 18px}
+.fit-office .office-heading h2{margin-top:4px;font-size:21px}
+.fit-office .office-heading .eyebrow{font-size:10px}
+.fit-office>.office-navigation{padding:8px 18px;gap:10px}
+.fit-office>.task-board-panel{padding:9px 18px}
+.fit-office .task-board-panel ol{grid-template-columns:repeat(3,minmax(0,1fr));max-height:112px;overflow:auto;margin-top:8px;gap:5px;overscroll-behavior:contain}
+.fit-office .board-task{padding:7px 8px;gap:7px;flex-wrap:wrap}
+.fit-office .board-task>div{min-width:80px}
+.fit-office .board-task small{display:none}
+.fit-office .board-task em{font-size:10px}
+.fit-office>.office-viewport{grid-column:1;min-height:0;max-height:none;overflow:hidden;position:relative;background:#15221c}
+.fit-office .shared-scene{position:absolute;left:50%;top:50%;min-width:0;transform-origin:center;will-change:transform}
+.fit-office>.shared-roster{grid-column:2;min-height:0;overflow:auto;display:flex;flex-direction:column;border-top:0;border-left:1px solid #345145;overscroll-behavior:contain}
+.fit-office .roster-item{padding:7px 10px;gap:8px;border-right:0;border-bottom:1px solid #2d4136;flex:none}
+.fit-office .roster-item>span:nth-child(2){min-width:0;flex:1}
+.fit-office .roster-item strong{font-size:12px}
+.fit-office .roster-item small{font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.office-employee-picker{display:flex;align-items:center;gap:8px;font-size:12px;color:#a8c8b9}
+.office-employee-picker select{max-width:190px;padding:5px 8px;background:#192e25;color:#d7ebdf;border:1px solid #3b5a49;border-radius:6px;font-size:12px}
+.fit-office .shared-office-count{display:none}
+.chat-page{flex:1;min-height:0!important;height:auto!important;overflow:hidden}
+.chat-main{min-width:0;min-height:0;overflow:hidden}
+.chat-toolbar,.chat-composer{flex:none}
+.messages{min-height:0;overscroll-behavior:contain}
+.chat-composer .attachment-tray{max-height:100px;overflow:auto}
+.chat-list{min-height:0;overscroll-behavior:contain}
+.profile>span,.connection-card>span:nth-child(2){min-width:0;flex:1}
+.profile small,.connection-card small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-head{padding:18px 16px 12px!important;gap:16px!important}
+.side-footer{padding:10px 14px!important}
+.side-section{margin-top:18px}
+@media(max-height:720px){.fit-office>.office-heading{padding:8px 14px}.fit-office .office-heading h2{font-size:18px}.fit-office>.office-navigation{padding:6px 14px}.fit-office .task-board-panel ol{max-height:90px}.fit-office .roster-item{padding:5px 9px}.chat-toolbar{padding:10px 16px}.chat-composer{padding-bottom:10px}.chat-composer .prompt-box{padding:10px 14px}.chat-composer textarea{height:48px}.chat-composer .prompt-bottom{margin-top:5px}.sidebar-head{gap:10px!important}.navbutton{padding:8px 12px}.profile{padding-top:8px}}
+@media(max-width:767px){.main>.topbar{padding:0 12px}.main>.page{padding:18px 14px}.main>.office-page{padding:10px 8px 8px}.fit-office{grid-template-columns:minmax(0,1fr)}.fit-office>.shared-roster{display:none}.fit-office>.office-heading{padding:10px 12px}.fit-office .office-heading h2{font-size:17px}.fit-office>.office-navigation{padding:6px 10px;justify-content:space-between}.office-employee-picker>span{display:none}.office-employee-picker select{max-width:175px}.fit-office .task-board-panel ol{grid-template-columns:repeat(2,minmax(0,1fr));max-height:100px}.fit-office>.task-board-panel{padding:8px 10px}.office-page>.office-disclaimer{font-size:11px}.chat-toolbar>div:first-child{min-width:0}.chat-toolbar strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px;display:block}.chat-composer .composer-context{display:none}}
+
+.main>.home-dashboard{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.9fr);gap:28px;overflow:hidden;max-width:1400px}
+.home-main,.home-team{min-height:0;min-width:0;display:flex;flex-direction:column}
+.home-main h1{font-size:30px;margin:12px 0 0;line-height:1.2}
+.home-main .lead{font-size:13px;margin-top:10px}
+.home-main .prompt-box{margin-top:20px;padding:14px 16px}
+.home-main .prompt-box textarea{height:64px;font-size:14px}
+.home-main .quick-prompts{gap:7px;margin-top:10px}
+.home-main .quick-prompts button{font-size:12px;padding:7px 9px}
+.home-project-summary{margin-top:20px;min-height:0}
+.home-project-summary .section-heading{margin:0 0 10px}
+.home-project-summary h2{font-size:16px}
+.home-project-links{display:flex;flex-wrap:wrap;gap:7px}
+.home-project-links button{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:9px 11px;background:#192820;border:1px solid #344c3d;border-radius:8px;font-size:12px}
+.home-project-links button span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.home-local-note{font-size:11px;display:flex;gap:7px;align-items:center;color:#8ca99b;margin-top:auto;padding-top:14px}
+.home-team .section-heading{margin:0 0 14px}
+.home-team-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow:auto;min-height:0;align-content:start;overscroll-behavior:contain}
+.home-team-list>button{display:flex;align-items:center;gap:8px;text-align:left;min-width:0;border:1px solid #34463d;background:#19241f;border-radius:10px;padding:6px 9px}
+.home-team-list>button:hover{border-color:var(--agent-color)}
+.home-team-list .adult-person{width:34px;height:54px;flex:none}
+.home-team-list>button>span:nth-child(2){min-width:0;flex:1}
+.home-team-list strong{display:block;font-size:14px}
+.home-team-list small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--agent-color);font-size:10px;margin-top:4px}
+.home-team-list>button>svg{color:#8aa994;flex:none}
+@media(max-width:1100px){.main>.home-dashboard{gap:18px;padding:18px 20px;grid-template-columns:minmax(0,1fr) minmax(230px,.85fr)}.home-team-list{gap:6px}.home-team-list>button{padding:5px 6px}.home-team-list .adult-person{width:26px;height:46px}.home-team-list>button>svg{display:none}.home-main h1{font-size:26px}.home-main .quick-prompts button{font-size:11px}.home-team .text-button{font-size:11px}}
+@media(max-width:767px){.main>.home-dashboard{display:flex;flex-direction:column;padding:16px 14px;gap:18px}.home-main{flex:none}.home-main h1{font-size:24px}.home-main .prompt-box{margin-top:12px}.home-main .prompt-box textarea{height:45px}.home-project-summary{margin-top:12px}.home-local-note{display:none}.home-team{flex:1}.home-team .section-heading{margin-bottom:8px}.home-team .section-heading p{display:none}.home-team-list .adult-person{width:28px;height:44px}.home-project-links button{padding:7px 9px}}
+@media(max-height:650px) and (min-width:768px){.home-main h1{font-size:24px}.home-main .prompt-box{margin-top:12px}.home-main .prompt-box textarea{height:48px}.home-project-summary{margin-top:14px}.home-team-list .adult-person{height:44px;width:28px}.home-team-list>button{padding:4px 7px}}

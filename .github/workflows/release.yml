@@ -117,6 +117,22 @@ jobs:
           node-version: '24'
       - name: Install browser test driver
         run: npm install --prefix /tmp/ditasha-ui --no-audit --no-fund playwright@1.62.1
+      - name: Build frontend for desktop layout verification
+        run: |
+          npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+          npm run --prefix frontend build
+      - name: Verify fitted desktop workspace
+        env:
+          DITASHA_PLAYWRIGHT_IMPORT: /tmp/ditasha-ui/node_modules/playwright/index.mjs
+          DITASHA_CHROME_EXECUTABLE: /usr/bin/google-chrome
+          DITASHA_UI_OUTPUT: desktop-preview
+        run: node tests/desktop-layout.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-preview
+          path: desktop-preview/*.png
+          retention-days: 7
       - name: Test phone interface with real server
         env:
           DITASHA_PLAYWRIGHT_IMPORT: /tmp/ditasha-ui/node_modules/playwright/index.mjs
@@ -201,6 +217,8 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
+          Fits the office and dashboard inside the application window. The full office floor scales with the available space, with a compact employee rail and picker. Navigation and the chat composer remain visible; long messages, task lists and settings scroll within their own panels. Browser layout checks cover 1024x600, 1280x720 and 1440x900, ten and eighteen employees, long chats and an active six-member board.
+
           Adds a Debian VPS sync server, Windows PC pairing and an Android 8+ companion for workspace.gremoryy.my.id. Phone tasks queue offline and run through Amii's employee workflow while the PC app is open. Recent chats, employee model labels, projects, payment metadata and the available Lora/Achi Excel report sync through HTTPS. Text/code files can be submitted and generated files downloaded.
 
           Includes account login, single-use PC pairing, encrypted PC tokens, revocation, idempotent requests and durable completion recovery. Interrupted work requires review instead of automatic reruns. API keys and Gmail credentials remain on the PC. One PC and one owner are supported. Android background push notifications and phone model editing are not included.
