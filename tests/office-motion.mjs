@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import {OfficeEngine} from '../frontend/test-build/office-engine.mjs';
 const engine=new OfficeEngine();engine.sync(['general','writer','developer','planner','extra']);
 const start=engine.snapshot();
-const frames=new Set();for(let i=0;i<60;i++){engine.tick(.05);frames.add(engine.snapshot().general.walkingFrame);}assert(frames.has(0)&&frames.has(1)&&frames.has(2)&&frames.has(3),'four distinct stepping frames while travelling');for(let i=0;i<40;i++)engine.tick(.05);
-assert.notDeepEqual(engine.snapshot().general.point,start.general.point,'idle employees walk');
+const frames=new Set();for(let i=0;i<60;i++){engine.tick(.05);frames.add(engine.snapshot().writer.walkingFrame);}assert(frames.has(0)&&frames.has(1)&&frames.has(2),'three stable stepping poses while travelling');for(let i=0;i<40;i++)engine.tick(.05);
+assert.deepEqual(engine.snapshot().general.point,start.general.point,'Amii stays at his desk');assert.notDeepEqual(engine.snapshot().writer.point,start.writer.point,'employees walk');
 async function finish(job){let done=false;job.then(()=>done=true);for(let i=0;i<1500&&!done;i++){engine.tick(.05);await Promise.resolve();}assert(done,'handoff completes');await job;}
 await finish(engine.assign('developer'));
 assert.equal(engine.actors.developer.phase,'working');assert.equal(engine.actors.developer.node,engine.actors.developer.desk);
-assert.equal(engine.actors.general.node,engine.actors.general.desk);
+assert.equal(engine.actors.general.node,engine.actors.general.desk);assert.deepEqual(engine.snapshot().general.point,start.general.point);
 const taskStart=engine.snapshot().developer.point;for(let i=0;i<100;i++)engine.tick(.05);assert.deepEqual(engine.snapshot().developer.point,taskStart,'worker stays at desk during AI');
 await finish(engine.report('developer'));assert.equal(engine.actors.developer.node,engine.actors.general.desk);
 engine.reset();for(let i=0;i<40;i++)engine.tick(.05);assert.notDeepEqual(engine.snapshot().developer.point,taskStart);

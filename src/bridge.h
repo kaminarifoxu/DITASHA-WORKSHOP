@@ -128,6 +128,7 @@ done:
     }
     free(job);return 0;
 }
+#include "trends.h"
 static BOOL updater_operation(App *app,const WCHAR *operation,unsigned long id,const WCHAR *payload);
 static HRESULT STDMETHODCALLTYPE bridge_invoke(ICoreWebView2WebMessageReceivedEventHandler *self,ICoreWebView2 *sender,ICoreWebView2WebMessageReceivedEventArgs *args) {
     (void)sender;App *app=((BridgeHandler*)self)->app;
@@ -157,6 +158,8 @@ static HRESULT STDMETHODCALLTYPE bridge_invoke(ICoreWebView2WebMessageReceivedEv
     }else if(!wcscmp(message,L"removeKey")) {
         WCHAR path[MAX_PATH];local_path(L"openrouter.key",path);
         if(DeleteFileW(path)||GetLastError()==ERROR_FILE_NOT_FOUND)send_reply(app,id,TRUE,"true");else fail_reply(app,id,"API key tidak dapat dihapus.");
+    }else if(!wcscmp(message,L"trends")) {
+        start_trends(app,id);
     }else if(!wcscmp(message,L"ai")||!wcscmp(message,L"aiCoding")) {
         if(InterlockedCompareExchange(&ai_pending,1,0)!=0){fail_reply(app,id,"AI masih menjawab. Tunggu sampai selesai.");goto finish;}
         AiJob *job=calloc(1,sizeof(AiJob));char *key=load_key();

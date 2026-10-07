@@ -6,11 +6,13 @@ Download `DITASHA-Workspace.exe` from [Releases](https://github.com/kaminarifoxu
 
 ## Amii and the office
 
-All new requests go through Amii. Amii uses a free AI call to choose a team member and create a brief, walks to that employee’s desk, and the specialist returns the result to Amii. Coding tasks use the free coding route. Existing conversations keep their history and now use Amii’s coordination too. This creates text and code drafts; it does not execute code or edit files on your PC.
+All new requests go through Amii. Amii uses a free AI call to choose a team member and create a brief. Amii stays at his desk; employees come there to receive tasks, work at their own desks, and bring the result back. Coding tasks use the free coding route. Existing conversations keep their history and now use Amii’s coordination too. This creates text and code drafts; it does not execute code or edit files on your PC.
 
-Amii routes writing and editing to Nara, planning and research summaries to Kira, programming to Rei, and other specialties to custom employees using their role and instructions. Clicking an employee card explicitly requests that employee through Amii.
+Amii routes writing to Nara, planning to Kira, FiveM code/assets to Rei, website code to Sora, design/branding concepts and SVG to Luna, and social media trend research to Mika. Custom employee specialties remain supported.
 
-Employees roam the floor while idle with a four-frame walking cycle, alternating steps and arm swings. Walking frames follow actual distance traveled and characters turn left/right with their route. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. Extra rooms contain Amii and up to three specialists; the active task automatically opens the specialist’s room.
+Mika fetches the public Google Trends Indonesia RSS feed, creates an evidence-based trend brief, and hands it to a writer, designer or another relevant specialist for a concrete deliverable. Source links and fetch time are included. These are Google search trends, not verified TikTok/Instagram viral rankings. This feature adds a fixed HTTPS request to trends.google.com; API keys are never sent there. It runs only when you ask Mika for a task. Feed failures are shown without fabricated trends. Clicking an employee card explicitly requests that employee through Amii.
+
+Employees roam the floor while idle with a fixed-scale walking cycle, alternating steps and arm swings. Walking frames follow actual distance traveled and characters turn left/right with their route. Amii remains at his desk while other employees move. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. Extra rooms contain Amii and up to three specialists; the active task automatically opens the specialist’s room.
 
 ## AI and data
 

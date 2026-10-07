@@ -85,6 +85,18 @@ jobs:
         run: |
           & .\tests\update-windows.exe .\DITASHA-Workspace.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows updater tests failed' }
+      - name: Check live public Google Trends feed
+        shell: pwsh
+        run: |
+          try {
+            $response = Invoke-WebRequest 'https://trends.google.com/trending/rss?geo=ID' -TimeoutSec 30
+            [xml]$feed = $response.Content
+            $items = @($feed.rss.channel.item)
+            if ($items.Count -lt 1) { throw 'No live RSS items' }
+            Write-Output "Live Google Trends Indonesia RSS: $($items.Count) items received."
+          } catch {
+            Write-Warning 'Live trends feed unavailable on this runner; app reports an error and does not invent trends.'
+          }
   release:
     needs: [build, windows-tests]
     if: github.ref == 'refs/heads/main'
@@ -109,7 +121,7 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Local Windows x64 workspace with role-based assignments through Amii: Nara for writing, Kira for planning, Rei for coding, and custom employee specialties. Characters now have four-frame walking animations, synchronized to travel distance, with direction changes and result delivery back to Amii. Includes a movement toggle, local projects/chats, free-only OpenRouter routes and verified updates.
+          Amii stays at his desk. Employees receive briefs there, work at their own desks, and return with results. Fixed walking sprite scale, added Luna for design, Rei for FiveM code/assets, Sora for website code, and Mika for live Google Trends Indonesia research with a handoff to another employee. Nara and Kira remain available. Includes a movement toggle, local projects/chats, free-only OpenRouter routes and verified updates.
 
           The app checks for new stable releases and can download verified updates automatically. Choose Restart to install when ready. Local data stays in LocalAppData.
 

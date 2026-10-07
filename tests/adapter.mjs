@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
-let listener,stored=null,key=false,lastOp,lastMessages,failAI=false,failSave=false,dispatchTarget='general',badDispatch=false,failWorker=false,dispatchPrompt='';
+import {createRequire} from 'node:module';
+const testRequire=createRequire(process.env.DITASHA_TEST_PACKAGE||new URL('../frontend/package.json',import.meta.url));
+globalThis.DOMParser=testRequire('@xmldom/xmldom').DOMParser;
+let listener,stored=null,key=false,lastOp,lastMessages,failAI=false,failSave=false,dispatchTarget='general',badDispatch=false,failWorker=false,dispatchPrompt='',failTrends=false,handoffTarget='writer';
+const feedXML='<rss xmlns:ht="https://trends.google.com/trending/rss"><channel><item><title>FiveM community update</title><pubDate>Wed, 07 Oct 2026 00:00:00 GMT</pubDate><ht:approx_traffic>1000+</ht:approx_traffic><ht:news_item><ht:news_item_title>Community story</ht:news_item_title><ht:news_item_url>https://example.com/story</ht:news_item_url><ht:news_item_source>Example</ht:news_item_source></ht:news_item></item></channel></rss>';
+
 globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},postMessage:message=>{
  const [op,id,...rest]=message.split('\n');const payload=rest.join('\n');let data=true,ok=true;
  try{
@@ -7,12 +12,18 @@ globalThis.window={chrome:{webview:{addEventListener:(_,fn)=>{listener=fn;},post
   else if(op==='hasKey')data=key;
   else if(op==='saveKey')key=true;
   else if(op==='save'){if(failSave)throw new Error('Disk full');stored=JSON.parse(payload);}
-  else if(op==='ai'||op==='aiCoding'){lastOp=op;lastMessages=JSON.parse(payload);if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
+  else if(op==='trends'){if(failTrends)throw new Error('Trends offline');data={rss:feedXML,source:'https://trends.google.com/trending/rss?geo=ID'};}
+  else if(op==='ai'||op==='aiCoding'){lastOp=op;lastMessages=JSON.parse(payload);if(failAI)throw new Error('Quota exceeded');if(lastMessages[0].content.startsWith('You are Mika')){data={choices:[{message:{content:JSON.stringify({analysis:'Google search trends; source https://example.com/story',handoff_employee_id:handoffTarget,brief:'Write a caption based on the supplied trend'})}}]};}else if(lastMessages[0].content.includes('Return ONLY JSON')){dispatchPrompt=lastMessages[0].content;data={choices:[{message:{content:badDispatch?'bad':JSON.stringify({employee_id:dispatchTarget,brief:'Task brief'})}}]};}else {if(failWorker)throw new Error('Worker quota');data={choices:[{message:{content:'Local AI test answer'}}]};}}
  }catch(error){ok=false;data={error:error.message};}
  queueMicrotask(()=>listener({data:{id:Number(id),ok,data}}));
 }}}};
+const {parseTrendFeed}=await import('../frontend/test-build/trends.mjs');
+assert.equal(parseTrendFeed(feedXML)[0].title,'FiveM community update');
+assert.throws(()=>parseTrendFeed('<rss><channel/></rss>'));
+assert.throws(()=>parseTrendFeed('<!DOCTYPE rss><rss/>'));
+assert.equal(parseTrendFeed(feedXML.replace('https://example.com/story','http://example.com/story'))[0].links.length,0);
 const {api,native,exportBackup,importBackup,validateState}=await import('../frontend/test-build/desktop.mjs');
-assert.equal((await api('/api/workspace')).employees.length,4);
+assert.equal((await api('/api/workspace')).employees.length,7);
 assert.equal((await api('/api/workspace')).connected,false);
 await native('saveKey','sk-or-v1-test-only-1234567890');
 const p=await api('/api/workspace',{type:'project',name:'Local Project',description:'Offline brief'});
@@ -33,7 +44,7 @@ await assert.rejects(api('/api/workspace',{type:'employee',name:'X',role:'Y',ins
 const invalid=JSON.parse(before);invalid.chats[0].agent='missing';assert.throws(()=>validateState(invalid));
 await assert.rejects(importBackup('{bad-json'));assert.equal(await exportBackup(),before);
 await importBackup(before);assert.equal(JSON.stringify(stored),JSON.stringify(JSON.parse(before)));
-assert(!before.includes('sk-or-'));assert.equal((await api('/api/workspace')).employees.length,5);
+assert(!before.includes('sk-or-'));assert.equal((await api('/api/workspace')).employees.length,8);
 console.log('Passed: local CRUD, project context, coding/general routing, AI failure, disk failure, backup validation, key exclusion.');
 
 const events=[];dispatchTarget='developer';
@@ -58,4 +69,10 @@ let assigned='';await api('/api/chat',{chat_id:gc.id,content:'Buat konsep logo',
 dispatchTarget='developer';
 const explicit=await api('/api/chat',{chat_id:gc.id,content:'Minta Nara membantu: buat artikel',onAssign:async id=>assigned=id});assert.equal(assigned,'writer');assert.equal(lastOp,'ai');assert(explicit.messages[1].content.includes('Hasil dari Nara'));
 console.log('Passed: Nara writing, Kira planning, custom role delegation, and explicit employee selection overriding incorrect router choice.');
+dispatchTarget='social';events.length=0;
+const social=await api('/api/chat',{chat_id:gc.id,content:'Cari tren untuk konten komunitas',onAssign:async id=>events.push('assign:'+id),onReport:async id=>events.push('report:'+id)});
+assert.deepEqual(events,['assign:social','report:social','assign:writer','report:writer']);assert(social.messages[1].content.includes('Mika → Nara'));assert(social.messages[1].content.includes('https://example.com/story'));assert(social.messages[1].content.includes('Diambil:'));assert(lastMessages.at(-1).content.includes('FiveM community update'));
+const beforeTrendsFailure=await exportBackup();failTrends=true;await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Cari tren'}),/Trends offline/);assert.equal(await exportBackup(),beforeTrendsFailure);failTrends=false;
+handoffTarget='missing';await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Cari tren'}),/handoff/);assert.equal(await exportBackup(),beforeTrendsFailure);
+console.log('Passed: live trend feed parsing, Mika-to-Nara handoff, source/date evidence, offline feed and invalid handoff without history loss.');
 await import('./office-motion.mjs');
