@@ -4,6 +4,12 @@ Local Windows AI workspace with a pixel office, animated employees, projects, no
 
 Download `DITASHA-Workspace.exe` from [Releases](https://github.com/kaminarifoxu/DITASHA-WORKSHOP/releases/latest). Windows 10/11 x64 is required. No Node.js or Python is needed to run the app. First-time setup can install Microsoft's WebView2 Runtime.
 
+## Amii and the office
+
+All new requests go through Amii. Amii uses a free AI call to choose a team member and create a brief, walks to that employee’s desk, and the specialist returns the result to Amii. Coding tasks use the free coding route. Existing conversations keep their history and now use Amii’s coordination too. This creates text and code drafts; it does not execute code or edit files on your PC.
+
+Employees roam the floor while idle. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. Extra rooms contain Amii and up to three specialists; the active task automatically opens the specialist’s room.
+
 ## AI and data
 
 Enter your OpenRouter key in Settings. General employees use `openrouter/free`; coding employees use `poolside/laguna-s-2.1:free` with a free-only fallback. Native requests apply zero-price provider caps. Keys are encrypted with Windows DPAPI, not embedded in source or releases. The workspace UI works offline; AI and app updates need internet.
