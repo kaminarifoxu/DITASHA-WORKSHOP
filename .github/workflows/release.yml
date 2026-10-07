@@ -217,6 +217,8 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
+          Adds chat beside the office using the same saved conversations and team workflow. Smaller windows have office/chat tabs. Sakura studio adds Japanese-inspired wood, flooring and windows, with adult anime-inspired 3D employees, eight walking poses and alternating work poses.
+
           Fits the office and dashboard inside the application window. The full office floor scales with the available space, with a compact employee rail and picker. Navigation and the chat composer remain visible; long messages, task lists and settings scroll within their own panels. Browser layout checks cover 1024x600, 1280x720 and 1440x900, ten and eighteen employees, long chats and an active six-member board.
 
           Adds a Debian VPS sync server, Windows PC pairing and an Android 8+ companion for workspace.gremoryy.my.id. Phone tasks queue offline and run through Amii's employee workflow while the PC app is open. Recent chats, employee model labels, projects, payment metadata and the available Lora/Achi Excel report sync through HTTPS. Text/code files can be submitted and generated files downloaded.

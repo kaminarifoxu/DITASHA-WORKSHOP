@@ -17,9 +17,9 @@ try{
    const status={provider:'openrouter',connected:false,permitted:false,models:[],accounts:[],general:'',coding:'',active:''};
    window.chrome={webview:{addEventListener:(_,fn)=>callback=fn,postMessage:message=>{const [op,id,...rest]=message.split('\n'),payload=rest.join('\n');let data=true;
     if(op==='load')data=stored;else if(op==='save')stored=JSON.parse(payload);else if(op==='hasKey')data=true;else if(op==='apiKeyStatus')data={provider:'openrouter',keys:{openrouter:true,groq:false,gemini:false,openai:false,custom:false}};
-    else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.15.1',status:'Ready',version:'',ready:false,automatic:true};
+    else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.16.0',status:'Ready',version:'',ready:false,automatic:true};
     else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
-    else if(op==='aiEmployee'){const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON'))return;data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:['writer','planner','developer','designer','web','finance'].map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
+    else if(op==='aiEmployee'){const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON')){if(!window.__completeFixture)return;data={choices:[{message:{content:'Completed inline office chat test.'}}]};queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));return;}data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:(window.__completeFixture?['writer']:['writer','planner','developer','designer','web','finance']).map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
     queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));
    }}};
   },custom);
@@ -33,6 +33,17 @@ try{
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();await floorFits(page);
   }
   await page.getByRole('checkbox',{name:'Gerak karakter'}).uncheck();
+  await page.evaluate(()=>window.__completeFixture=true);
+  await page.getByRole('button',{name:'Chat baru di kantor'}).click();
+  await page.getByRole('textbox',{name:'Pesan untuk AI'}).fill('Test inline office reply');await page.getByRole('button',{name:'Kirim pesan',exact:true}).click();
+  await page.getByText('Completed inline office chat test.',{exact:true}).first().waitFor({timeout:30000});
+  assert.equal(await page.locator('.office-workbench').count(),1,'Sending stays in the office');await frameFits(page);
+  await page.getByRole('button',{name:'Percakapan',exact:true}).first().click();await page.getByText('Completed inline office chat test.',{exact:true}).first().waitFor();
+  await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
+  await page.setViewportSize({width:800,height:720});
+  await page.getByRole('button',{name:'Kantor',exact:true}).click();await floorFits(page);
+  await page.getByRole('button',{name:'Chat Amii',exact:true}).click();assert(await page.getByRole('textbox',{name:'Pesan untuk AI'}).isVisible());await frameFits(page);
+  await page.setViewportSize({width:1440,height:900});await page.evaluate(()=>window.__completeFixture=false);
   await page.getByRole('button',{name:'Long conversation'}).first().click();await page.locator('.messages .message').last().waitFor();await frameFits(page);
   assert(await page.locator('.messages').evaluate(e=>e.scrollHeight>e.clientHeight));
   const send=await page.getByRole('button',{name:'Kirim pesan',exact:true}).boundingBox();assert(send&&send.y+send.height<=900);

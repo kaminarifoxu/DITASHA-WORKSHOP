@@ -128,3 +128,7 @@ Download the Windows EXE, Android APK and server ZIP from Releases. See [Debian 
 ## Fitted workspace (3.15.1)
 
 The office floor and compact dashboard fit inside the app window. The office scales automatically when the window or employee count changes, keeping all desks on screen. A side rail and employee picker provide readable task shortcuts. Chat scrolling stays inside the message panel, with navigation and the composer visible. Long histories, task lists and settings use internal scrolling.
+
+## Sakura studio and office chat (3.16.0)
+
+Chat with Amii directly beside the office floor, using the same saved conversations, attachments and team handoffs as Percakapan. Smaller windows provide Kantor/Chat Amii tabs. The room uses warm wood, tatami-inspired flooring, shoji-style windows and sakura accents. All ten employees share adult anime-inspired 3D faces, eight walking poses, alternating work poses, idle breathing and correct direction changes.
