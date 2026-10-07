@@ -40,6 +40,7 @@ jobs:
           node build-adapter-test.mjs
           node ../tests/adapter.mjs
           node ../tests/office-motion.mjs
+          node ../tests/characters-3d.mjs
       - name: Test update metadata and native JSON validation
         run: |
           gcc -Wall -Wextra -Werror -Wno-misleading-indentation -Ivendor tests/update-core.c -o tests/update-core
@@ -133,7 +134,9 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Remakes all ten employees in one consistent chibi style with fixed proportions and shared idle, walking and working animations. Adds Achi for IDR income/expenses/budgets, Lora for multiple Gmail/IMAP inboxes and reply drafts, and Dante for selected-folder inventories, text previews and reviewed rename/move actions. Email credentials stay encrypted on the PC; no automatic email sending, file deletion or overwriting.
+          Replaces the chibi characters with shared, shaded 3D employee models using adult proportions. Adds an in-app Gmail connection guide for Lora. All 50 character poses render with valid geometry.
+
+          The previous update remade all ten employees in one consistent chibi style with fixed proportions and shared idle, walking and working animations. Adds Achi for IDR income/expenses/budgets, Lora for multiple Gmail/IMAP inboxes and reply drafts, and Dante for selected-folder inventories, text previews and reviewed rename/move actions. Email credentials stay encrypted on the PC; no automatic email sending, file deletion or overwriting.
 
           Adds a one-time recommended free OpenRouter team preset, improved built-in role prompts, visible employee instructions and alternative model IDs. Gemma powers general roles and North Mini Code powers FiveM/web roles with at least 8192 output tokens. Custom employee assignments are preserved. Live model availability and quotas require account testing.
 

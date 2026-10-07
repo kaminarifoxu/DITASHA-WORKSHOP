@@ -9,4 +9,6 @@ await build({configFile:false,build:{lib:{entry:'lib/trends.ts',formats:['es'],f
 await build({configFile:false,build:{lib:{entry:'lib/chat-files.ts',formats:['es'],fileName:()=> 'chat-files.mjs'},outDir:'test-build',emptyOutDir:false,minify:false}});
 
 await build({configFile:false,plugins:[react()],resolve:{alias:{'@':path.resolve('.')}},build:{lib:{entry:'MessageBody.tsx',formats:['es'],fileName:()=> 'message-body.mjs'},outDir:'test-build',emptyOutDir:false,minify:false,rollupOptions:{external:['react','react/jsx-runtime','react-dom']}}});
-await build({configFile:false,plugins:[react()],build:{lib:{entry:'components/workspace/assistant-person.tsx',formats:['es'],fileName:()=> 'assistant-person.mjs'},outDir:'test-build',emptyOutDir:false,minify:false,rollupOptions:{external:['react','react/jsx-runtime']}}});
+await build({configFile:false,plugins:[react()],resolve:{alias:{'@':path.resolve('.')}},build:{lib:{entry:'components/workspace/assistant-person.tsx',formats:['es'],fileName:()=> 'assistant-person.mjs'},outDir:'test-build',emptyOutDir:false,minify:false,rollupOptions:{external:['react','react/jsx-runtime']}}});
+
+await build({configFile:false,build:{lib:{entry:'lib/character-3d.ts',formats:['es'],fileName:()=> 'character-3d.mjs'},outDir:'test-build',emptyOutDir:false,minify:false}});

@@ -84,3 +84,5 @@ Version 3.12.1: operational employees
 - Tools require Windows PowerShell 5.1, included with Windows 10/11. Desktop compilation, adapter/ledger tests, PowerShell parser/MIME tests and isolated real file-operation tests pass. Actual Gmail authentication, DPAPI and full Windows UI require checking on the user PC.
 
 Version 3.12.1: all ten employees now use one consistent chibi vector character system in office, chat, team cards, and the avatar picker. Hair, clothing, glasses and accessories preserve each identity. Shared head/body proportions stay fixed across idle, walk and work; walking alternates legs/arms and working adds a tablet. Previous raster sprite atlases are no longer used by the frontend.
+
+Version 3.13.0: replaces chibi characters with a shared Three.js 3D rig, adult proportions (about 7.4 head heights), lit faceted geometry, distinct hair/clothing/accessories and fixed cameras across five poses. Models render locally through Three.js SVGRenderer with cached SVG sprites, so no GPU contexts or network character assets are needed. Lora’s panel now includes Gmail 2-Step Verification, App Password and IMAP setup steps.
