@@ -38,7 +38,7 @@ try{
   await page.getByRole('textbox',{name:'Pesan untuk AI'}).fill('Test inline office reply');await page.getByRole('button',{name:'Kirim pesan',exact:true}).click();
   await page.getByText('Completed inline office chat test.',{exact:true}).first().waitFor({timeout:30000});
   assert.equal(await page.locator('.office-workbench').count(),1,'Sending stays in the office');await frameFits(page);
-  await page.getByRole('button',{name:'Percakapan',exact:true}).first().click();await page.getByText('Completed inline office chat test.',{exact:true}).first().waitFor();
+  await page.getByRole('navigation',{name:'Navigasi utama'}).getByRole('button',{name:/^Percakapan/}).click();await page.getByText('Completed inline office chat test.',{exact:true}).first().waitFor();
   await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
   await page.setViewportSize({width:800,height:720});
   await page.getByRole('button',{name:'Kantor',exact:true}).click();await floorFits(page);
