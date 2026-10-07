@@ -142,8 +142,8 @@ html,body,#root{height:100%;overflow:hidden}
 .primary,.send-button{color:#3c2940}.primary:hover,.send-button:hover{background:#f5c9d7}
 .home-team-list>button,.home-project-links button,.prompt-box{background:#242333;border-color:#454052}
 .home-local-note,.composer-note,.lead{color:#b4a7bb}.assistant-chip{background:#342b3d;color:#ecd3e1;border-color:#514359}
-.office-workbench{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30vw,450px);gap:12px;padding:14px 16px 10px;overflow:hidden}
-.office-workbench>.office-page{min-height:0;min-width:0;display:flex;flex-direction:column;gap:7px;padding:0;overflow:hidden}
+.office-workbench{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30vw,450px);grid-template-rows:minmax(0,1fr);gap:12px;padding:14px 16px 10px;overflow:hidden}
+.office-workbench>.office-page{margin:0;width:100%;height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;gap:7px;padding:0;overflow:hidden}
 .office-workbench .fit-office{grid-template-columns:minmax(0,1fr);background:#282536;border-color:#51445b}
 .office-workbench .fit-office>.shared-roster{display:none}
 .office-workbench .fit-office>.office-heading{padding:12px 14px;background:#292636}

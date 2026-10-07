@@ -25,7 +25,7 @@ try{
   },custom);
   await page.goto(base);await page.locator('.fit-office .office-worker').last().waitFor();assert.equal(await page.locator('.fit-office .office-worker').count(),10+custom);
   for(const viewport of [{width:1280,height:720},{width:1024,height:600},{width:1440,height:900}]){
-   await page.setViewportSize(viewport);await floorFits(page);
+   await page.setViewportSize(viewport);try{await floorFits(page);}catch(e){await page.screenshot({path:join(output,'failed-office.png')});console.log(await page.locator('.office-workbench,.office-page,.fit-office,.office-viewport,.shared-scene').evaluateAll(es=>es.map(e=>({class:e.className,rect:e.getBoundingClientRect().toJSON()}))));throw e;}
    if(custom===0)await page.screenshot({path:join(output,'office-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Beranda',exact:true}).click();await page.locator('.home-team-list').waitFor();await frameFits(page);
    assert.equal(await page.locator('.home-dashboard').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false,'Home fits without page scrolling');
