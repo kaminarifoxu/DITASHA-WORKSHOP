@@ -74,6 +74,7 @@ function Mail-AchiSort($record){
  $record.review='sorted'
  $record.reason='Disortir otomatis oleh Achi berdasarkan bukti email.'
  if($record.paymentType -eq 'Perlu ditinjau'){$record.review='pending';$record.reason='Status transaksi belum jelas dari email.';return $record}
+ if($record.paymentType -eq 'Pengembalian' -and (Mail-PaymentType ($record.subject+"`n"+$record.excerpt)) -ne 'Pengembalian'){$record.review='pending';$record.reason='Email membahas refund, tetapi belum membuktikan dana telah dikembalikan.';return $record}
  if($record.paymentType -eq 'Pembayaran gagal'){$record.reason='Pembayaran gagal; tidak dihitung sebagai uang keluar.';return $record}
  if($null -eq $record.amount){$record.review='pending';$record.reason='Status dikenali, tetapi jumlah tidak ditemukan atau beberapa jumlah berbeda. Achi tidak menebak jumlah.';return $record}
  if($record.paymentType -eq 'Tagihan'){$record.reason='Tagihan belum dibayar, disimpan terpisah dari pengeluaran.';return $record}

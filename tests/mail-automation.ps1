@@ -31,6 +31,8 @@ $failed=TestRecord 'Discord payment failed' 'Please update your payment method';
 $bill=TestRecord 'Your invoice #42' 'Amount due Rp 20.000';Assert ($bill.review -eq 'sorted' -and $bill.paymentType -eq 'Tagihan') 'Unpaid invoice automatically sorted outside ledger'
 $foreign=TestRecord 'You paid to Merchant for invoice 4323' 'USD 3';Assert ($foreign.review -eq 'sorted' -and $foreign.currency -eq 'USD') 'Other currencies automatically sorted in Excel'
 $unclear=TestRecord 'Payment completed' 'Subtotal Rp 100.000 tax Rp 11.000 total Rp 111.000';Assert ($unclear.review -eq 'pending') 'Conflicting amounts require attention'
+$refundRequest=TestRecord 'Refund requested' 'Please refund Rp 25.000';Assert ($refundRequest.review -eq 'pending') 'Refund request is not a completed refund'
+$receivedRefund=TestRecord 'Refund processed' 'Rp 25.000';Assert ($receivedRefund.review -eq 'auto' -and $receivedRefund.kind -eq 'income') 'Explicit completed refund can be recorded'
 $badDate=TestRecord 'Payment completed' 'Rp 20.000' 'unknown';Assert ($badDate.review -eq 'pending' -and !$badDate.transactionDate) 'Missing date never defaults to today'
 Assert ((Mail-Category 'Nikmati Transaksi Tanpa Biaya Konversi Kurs di bluValas Pakai Kartu Debit blu' 'bank@example.test' 'Transaksi Rp 10.000') -eq 'Promosi') 'blu promotional offer excluded'
 $ledger=Mail-LedgerEntries ([pscustomobject]@{records=@($auto,$failed,$bill,$foreign,$unclear,$badDate)})
