@@ -48,7 +48,7 @@ try{
   await page.getByRole('button',{name:'Chat Amii',exact:true}).click();assert(await page.getByRole('textbox',{name:'Pesan untuk AI'}).isVisible());await frameFits(page);
   await page.getByRole('button',{name:'Keuangan, email & file',exact:true}).click();
   await page.getByRole('button',{name:'Achi Keuangan',exact:true}).click();
-  await page.getByText('Discord payment failed',{exact:true}).waitFor();
+  try{await page.getByText('Discord payment failed').waitFor();}catch(error){await page.screenshot({path:join(output,'failed-achi.png')});console.log({errors,panel:await page.locator('.mail-automation').textContent()});throw error;}
   assert.equal(await page.locator('tbody').getByText('Disortir otomatis',{exact:true}).count(),2,'Recognized outcomes do not require manual review');
   assert(await page.getByText('Tidak ada uang keluar',{exact:true}).isVisible());
   assert.equal(await page.getByRole('button',{name:'Catat di ledger',exact:true}).count(),0,'Sorted failure/foreign receipt does not demand ledger confirmation');
