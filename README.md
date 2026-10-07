@@ -8,7 +8,9 @@ Download `DITASHA-Workspace.exe` from [Releases](https://github.com/kaminarifoxu
 
 All new requests go through Amii. Amii uses a free AI call to choose a team member and create a brief, walks to that employee’s desk, and the specialist returns the result to Amii. Coding tasks use the free coding route. Existing conversations keep their history and now use Amii’s coordination too. This creates text and code drafts; it does not execute code or edit files on your PC.
 
-Employees roam the floor while idle. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. Extra rooms contain Amii and up to three specialists; the active task automatically opens the specialist’s room.
+Amii routes writing and editing to Nara, planning and research summaries to Kira, programming to Rei, and other specialties to custom employees using their role and instructions. Clicking an employee card explicitly requests that employee through Amii.
+
+Employees roam the floor while idle with a four-frame walking cycle, alternating steps and arm swings. Walking frames follow actual distance traveled and characters turn left/right with their route. Movement runs across app views and is enabled by default even when Windows reduced motion is on. Use **Gerak karakter** above the office to switch it off. When disabled, task handoffs complete immediately. Extra rooms contain Amii and up to three specialists; the active task automatically opens the specialist’s room.
 
 ## AI and data
 

@@ -24,3 +24,8 @@
 .auto-update-choice{display:flex;gap:13px;align-items:flex-start;color:#c3ddcc;font-size:14px;line-height:1.7}.auto-update-choice input{width:18px;height:18px;margin-top:3px;accent-color:#50d6ba}.auto-update-choice small{display:block;color:#93b09f;font-size:12px}.update-status{margin-top:20px!important;background:#13251a;border:1px solid #304b37;border-radius:7px;padding:14px;font-size:14px!important}.github-token-heading{margin:28px 0 10px!important;font-size:17px!important}
 
 .movement-toggle{display:flex;align-items:center;gap:6px;color:#b9d7c5;font-size:12px;white-space:nowrap}.movement-toggle input{accent-color:#50d6ba}.office-navigation{flex-wrap:wrap}.office-worker.is-walking .worker-activity{opacity:.85}
+
+/* Walking frames are advanced by distance travelled, not a stationary wobble. */
+.moving-worker .pixel-person.stepping{animation:none!important;translate:0 0!important;rotate:0deg!important;transform:none!important}
+.pixel-person.stepping>svg{width:100%;height:100%;display:block;transform:scaleX(var(--facing));transform-origin:center;overflow:hidden}
+.office-worker{z-index:var(--depth,2)}
