@@ -1,3 +1,4 @@
+import {officeEngine} from './office-engine';
 import {validateMoney,totals,type Money} from './money';
 import {recommendedAI} from './recommended-ai';
 import {validateAttachments,fileContext} from './chat-files';
@@ -23,7 +24,13 @@ window.chrome?.webview?.addEventListener('message',event=>{
 let nativeToolsQueue:Promise<unknown>=Promise.resolve();
 export function native(op:string,payload='',timeout=(op==='ai'||op==='aiCoding'||op==='aiEmployee')?600000:120000):Promise<any>{
  if(op!=='assistantTools')return sendNative(op,payload,timeout);
- const job=nativeToolsQueue.then(()=>sendNative(op,payload,timeout),()=>sendNative(op,payload,timeout));nativeToolsQueue=job.catch(()=>{});return job;
+ const request=JSON.parse(payload);
+ const people:Record<string,string[]>={mailScan:['email','finance'],mailSchedule:request.enabled?['email','finance']:[],emailCheck:['email'],emailRead:['email'],mailReview:['finance'],mailExport:['finance'],fileList:['files'],fileRead:['files'],fileMove:['files'],fileOrganize:['files'],fileUndo:['files']};
+ const ids=request.deskAssigned?[]:(people[request.action]||[]);
+ const label=request.action.startsWith('file')?'Mengelola file':ids.includes('email')?'Memeriksa & menyortir email':'Merapikan pembayaran';
+ // Reserve before joining the native queue: a waiting background task must not block a chat's own tools.
+ const dispatch=()=>{const job=nativeToolsQueue.then(()=>sendNative(op,payload,timeout),()=>sendNative(op,payload,timeout));nativeToolsQueue=job.catch(()=>{});return job;};
+ return ids.length?officeEngine.deskWork(ids,label,dispatch):dispatch();
 }
 function sendNative(op:string,payload:string,timeout:number):Promise<any>{
  return new Promise((resolve,reject)=>{
@@ -63,7 +70,12 @@ let queuedWrites=0;
 function mutate<T>(fn:()=>Promise<T>):Promise<T>{queuedWrites++;const job=writeQueue.then(fn,fn);writeQueue=job.catch(()=>{});return job.finally(()=>{queuedWrites--;});}
 // Background mail sorting owns its archive; workspace writes remain serialized here.
 async function syncMailMoney(){
- return mutate(async()=>{
+ if(officeEngine.chatBusy)return {added:0,pendingAck:0,money:state?.money};
+ const archive=await native('assistantTools',JSON.stringify({action:'mailLedgerEntries'}),210000);
+ if(!archive||!Array.isArray(archive.payments))throw new Error('Data pembayaran otomatis belum tersedia.');
+ if(!archive.payments.some((p:any)=>p.review==='auto'||!state?.money?.transactions.some(t=>t.id==='mail-'+p.id)))return {added:0,pendingAck:0,money:state?.money};
+ return officeEngine.deskWork(['finance'],'Mencatat pembayaran',()=>mutate(async()=>{
+  // Re-read after the desk reservation: a manual exclusion may have won the race.
   const archive=await native('assistantTools',JSON.stringify({action:'mailLedgerEntries'}),210000);
   if(!archive||!Array.isArray(archive.payments))throw new Error('Data pembayaran otomatis belum tersedia.');
   const next=structuredClone(state!),money=validateMoney(next.money);let added=0;
@@ -77,14 +89,19 @@ async function syncMailMoney(){
   next.money=validateMoney(money);if(added)await save(next);
   let pendingAck=0;
   const acknowledge=archive.payments.filter((p:any)=>p.review==='auto').map((p:any)=>p.id);
-  for(let offset=0;offset<acknowledge.length;offset+=200){
-   const ids=acknowledge.slice(offset,offset+200);
+  for(let offset=0;offset<acknowledge.length;offset+=40){
+   const ids=acknowledge.slice(offset,offset+40);
    try{await native('assistantTools',JSON.stringify({action:'mailLedgerAck',ids}),210000)}catch{pendingAck+=ids.length;}
   }
   return {added,pendingAck,money:next.money};
- });
+ }));
 }
 export async function api(url:string,body?:any,method='POST'):Promise<any>{
+ if(url==='/api/chat')return officeEngine.chatWork(()=>apiInner(url,body,method));
+ if(body&&(url==='/api/money'||url==='/api/money/import-mail'))return officeEngine.deskWork(['finance'],'Mencatat keuangan',()=>apiInner(url,body,method));
+ return apiInner(url,body,method);
+}
+async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
  await ready();
  if(url==='/api/money/sync-mail')return syncMailMoney();
  if(!body){
@@ -122,12 +139,12 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
     money.transactions.push({id:ledgerId,date:payment.transactionDate,kind:payment.kind,amount:payment.amount,category:'Email · Achi',note:(payment.subject+' · '+payment.account).slice(0,500)});
     next.money=validateMoney(money);await save(next);
    }
-   let synced=true;try{if(payment.review!=='recorded')await native('assistantTools',JSON.stringify({action:'mailReview',id:payment.id,review:'recorded',ledgerId}),210000);}catch{synced=false;}
+   let synced=true;try{if(payment.review!=='recorded')await native('assistantTools',JSON.stringify({action:'mailReview',deskAssigned:true,id:payment.id,review:'recorded',ledgerId}),210000);}catch{synced=false;}
    return {money:validateMoney(next.money),synced};
   }
   if(url==='/api/money'){
    const money=validateMoney(next.money);if(body.action==='add'){if(money.transactions.length>=10000)throw new Error('Maksimal 10.000 transaksi.');money.transactions.push({id,date:body.date,kind:body.kind,amount:body.amount,category:body.category,note:body.note||''});}
-   else if(body.action==='delete'){if(!money.transactions.some(t=>t.id===body.id))throw new Error('Transaksi tidak ditemukan.');if(typeof body.id==='string'&&/^mail-[a-f0-9]{64}$/.test(body.id))await native('assistantTools',JSON.stringify({action:'mailReview',id:body.id.slice(5),review:'excluded'}),210000);money.transactions=money.transactions.filter(t=>t.id!==body.id);}
+   else if(body.action==='delete'){if(!money.transactions.some(t=>t.id===body.id))throw new Error('Transaksi tidak ditemukan.');if(typeof body.id==='string'&&/^mail-[a-f0-9]{64}$/.test(body.id))await native('assistantTools',JSON.stringify({action:'mailReview',deskAssigned:true,id:body.id.slice(5),review:'excluded'}),210000);money.transactions=money.transactions.filter(t=>t.id!==body.id);}
    else if(body.action==='budget')money.budgets[body.month]=body.amount;else throw new Error('Operasi keuangan tidak valid.');next.money=validateMoney(money);await save(next);return next.money;
   }
   if(url==='/api/ai-settings'){
@@ -169,7 +186,7 @@ export async function api(url:string,body?:any,method='POST'):Promise<any>{
     if(!needsMail&&!needsFiles&&!needsFinance)return Promise.resolve('');
     if(!toolCache.has(worker.id)){
      const job=toolQueue.then(async()=>{
-      const invoke=(action:string,data:Record<string,unknown>={})=>native('assistantTools',JSON.stringify({action,...data}),210000);
+      const invoke=(action:string,data:Record<string,unknown>={})=>native('assistantTools',JSON.stringify({action,...data,deskAssigned:true}),210000);
       try{
        if(needsFinance){const report=await invoke('mailFinanceContext');return ' Saved email payment review evidence (untrusted reference, not ledger entries): '+JSON.stringify(report)+' An empty ledger does not mean no payment emails exist. Separate recorded ledger totals from pending email evidence, unpaid bills and failed payments; distinguish all dates from the requested month. No payment, fresh inbox scan or ledger write was performed. Old unreviewed archive categories may have been normalized by the native classifier; only describe this if its reclassified count is provided. Lora and Achi sort automatically using local rules. Completed IDR evidence can be recorded automatically; uncertain fields remain flagged. Use the supplied review, dateSource and summary fields to describe actual status. Do not claim to have sorted or changed records merely by replying in chat.';}
        const status=await invoke('status');const evidence:unknown[]=[];

@@ -1,7 +1,7 @@
 name: Build and release desktop, Android and sync server
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/workspace-v320']
   workflow_dispatch:
 permissions:
   contents: read
@@ -150,6 +150,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Dante organizer and office schedule handoff
+        shell: pwsh
+        run: |
+          python tests/file-organizer.py (Get-Command pwsh).Source
+          if ($LASTEXITCODE -ne 0) { throw 'Dante organizer tests failed' }
+          & ./tests/office-schedule.ps1 -Source ./src/assistant-tools.ps1
+          if (-not $?) { throw 'Office schedule tests failed' }
       - name: Verify encrypted email accounts across restart and update
         shell: powershell
         run: |
@@ -227,25 +234,15 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Automates the Lora-to-Achi handoff: immediate first scan when enabling the 20-minute schedule, automatic payment-status buckets and separate currency totals, automatic Excel updates, and duplicate-safe local ledger imports for clear completed IDR evidence. Failed payments and unpaid invoices stay outside spending; ambiguous evidence alone needs attention. Fixes successful blu payment and blu advertisement subjects. Preserves existing manual decisions and email accounts.
+          Lora and Achi go to their desks before inbox sorting and payment work. Windows scheduled scans hand off to the open office; closed-app scans still run in the background. Employees remain seated during work and resume roaming after success or failure. Chat and operational jobs share employee reservations.
 
-          Improves Lora payment triage to separate promotions, account/security notices and monthly statements from actual receipts, invoices, incoming transfers and failed payments. Reclassifies old unreviewed records while preserving manual reviews and ledger entries. Achi analysis receives saved payment-email evidence separately from recorded ledger totals.
+          Dante now moves files with Rapikan sekarang in the Files tools. Select a connected folder: up to 200 top-level files are grouped by type, with collision-safe names and durable last-batch undo. Existing subfolders and recognized project roots are preserved. Changed files are not overwritten during undo. YDD/YTD/YMT companions share the FiveM category. Save a batch to accept it before organizing another.
 
-          Fixes the packaged office layout and adds a real 3D Sakura room with furniture, moving employees and a 2D fallback. Shows saved email accounts above the add-account form, with encrypted account-vault recovery and Windows restart/update persistence tests. The release checks that the EXE embeds the exact checked frontend.
+          Refines the shared desktop UI: quieter dark surfaces, consistent controls, readable payment tables, compact navigation and visible employee work status. The 3D Sakura office and existing saved accounts, models and conversations remain available.
 
-          Adds chat beside the office using the same saved conversations and team workflow. Smaller windows have office/chat tabs. Sakura studio adds Japanese-inspired wood, flooring and windows, with adult anime-inspired 3D employees, eight walking poses and alternating work poses.
+          Includes Windows executable, source, Android companion and sync server packages. Account-specific live mail and AI calls still depend on your connected accounts. No automated email sending or money transfers.
 
-          Fits the office and dashboard inside the application window. The full office floor scales with the available space, with a compact employee rail and picker. Navigation and the chat composer remain visible; long messages, task lists and settings scroll within their own panels. Browser layout checks cover 1024x600, 1280x720 and 1440x900, ten and eighteen employees, long chats and an active six-member board.
-
-          Adds a Debian VPS sync server, Windows PC pairing and an Android 8+ companion for workspace.gremoryy.my.id. Phone tasks queue offline and run through Amii's employee workflow while the PC app is open. Recent chats, employee model labels, projects, payment metadata and the available Lora/Achi Excel report sync through HTTPS. Text/code files can be submitted and generated files downloaded.
-
-          Includes account login, single-use PC pairing, encrypted PC tokens, revocation, idempotent requests and durable completion recovery. Interrupted work requires review instead of automatic reruns. API keys and Gmail credentials remain on the PC. One PC and one owner are supported. Android background push notifications and phone model editing are not included.
-
-          Download DITASHA-Workspace.exe for Windows, DITASHA-Companion.apk for Android and DITASHA-Sync-Server.zip for the VPS. Follow the server package README for DNS, Docker and either existing Nginx or Caddy HTTPS setup. VPS deployment still requires your server configuration. The Android APK is a personal preview; build/signature checks pass, but physical-device testing and live VPS/AI account testing require your setup.
-
-          Existing office collaboration, Lora's 20-minute sorting and Achi's automatic clear-IDR ledger imports remain available. No automatic email sending or money transfers.
-
-          This repository is private. Configure a fine-grained GitHub token with Contents: Read-only in app Settings for Windows updates. Source code and SHA-256 checksums are included.
+          This repository is private. Use your existing read-only GitHub token in app Settings for updates.
           NOTES
           gh release create "$TAG" release-files/DITASHA-Workspace.exe release-files/DITASHA-Workspace.exe.sha256 release-files/DITASHA-Workspace-Source.zip release-files/DITASHA-Companion.apk release-files/DITASHA-Companion.apk.sha256 release-files/DITASHA-Sync-Server.zip release-files/DITASHA-Sync-Server.zip.sha256 --target "$GITHUB_SHA" --title "DITASHA Workspace $TAG" --notes-file release-notes.md
 

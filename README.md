@@ -1,3 +1,11 @@
+## v3.20.0 · Desk work and Dante organizer
+
+Lora and Achi arrive at their desks before sorting mail, updating payment reviews or recording money. While the app is open, its heartbeat hands Windows scheduled scans to the office queue. After closing or a crash, an expired heartbeat restores background scanning (a scan queued just before closing can wait until the next Windows schedule). Work completes or fails before employees resume roaming. Chat jobs and operational tools reserve employees to prevent conflicting movements.
+
+Dante: open **Keuangan, email & file → Dante → select a folder → Rapikan sekarang**. This moves up to 200 files directly inside that folder into categories; existing subfolders are not traversed. Conflicting names receive numbered suffixes. Project folders with known project markers are rejected. The last batch has a persistent history and undo. Edited destination files or occupied original names are left in place and reported. **Simpan hasil batch** accepts the batch and closes its undo history, enabling another batch. Chat inventory and planning remain available separately.
+
+The shared desktop UI now has consistent surfaces, spacing, table formatting and a work-status indicator. Movement can still be disabled; workers take their desks immediately in that mode.
+
 # DITASHA-WORKSHOP
 
 Local Windows AI workspace with a 3D character office, animated employees, projects, notes, and chat history stored on your PC.

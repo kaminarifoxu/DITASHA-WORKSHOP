@@ -21,6 +21,15 @@ try{
     else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.17.0',status:'Ready',version:'',ready:false,automatic:true};
     else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[{id:'saved-one',label:'Personal',email:'one@example.test',host:'imap.example.test'},{id:'saved-two',label:'Work',email:'two@example.test',host:'imap.example.test'}],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:JSON.parse(payload).action==='mailStatus'?[{id:'f'.repeat(64),subject:'Discord payment failed',account:'one@example.test',paymentType:'Pembayaran gagal',review:'sorted',amount:null,currency:'',reason:'Tidak ada uang keluar',date:'2026-10-07'},{id:'e'.repeat(64),subject:'You paid to Merchant',account:'one@example.test',paymentType:'Bukti pembayaran',review:'sorted',amount:3,currency:'USD',reason:'Disortir otomatis',date:'2026-10-07'}]:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
     else if(op==='aiEmployee'){const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON')){if(!window.__completeFixture)return;data={choices:[{message:{content:'Completed inline office chat test.'}}]};queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));return;}data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:(window.__completeFixture?['writer']:['writer','planner','developer','designer','web','finance']).map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
+    if(op==='assistantTools'){
+     const request=JSON.parse(payload);
+     if(request.action==='status')data.roots=[{id:'fixture-folder',path:'C:\\Workspace Files'}];
+     if(request.action==='fileHistory')data={entries:[],undoAvailable:!!window.__organized};
+     if(request.action==='fileList')data={files:[],truncated:false};
+     if(request.action==='fileOrganize'){window.__organized=true;data={entries:[],undoAvailable:true,moved:2,errors:[]};}
+     if(request.action==='fileUndo'){window.__organized=false;data={entries:[],undoAvailable:false,moved:2,errors:[]};}
+     if(request.action==='mailScan'&&window.__holdScan){window.__finishScan=()=>callback({data:{id:Number(id),ok:true,data}});return;}
+    }
     queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));
    }}};
   },custom);
@@ -53,6 +62,27 @@ try{
   assert(await page.getByText('Tidak ada uang keluar',{exact:true}).isVisible());
   assert.equal(await page.getByRole('button',{name:'Catat di ledger',exact:true}).count(),0,'Sorted failure/foreign receipt does not demand ledger confirmation');
   await frameFits(page);if(custom===0)await page.screenshot({path:join(output,'achi-automatic.png')});
+  if(custom===0){
+   await page.getByRole('button',{name:'Dante File',exact:true}).click();
+   await page.getByRole('combobox',{name:'Pilih folder',exact:true}).selectOption('fixture-folder');
+   await page.getByRole('button',{name:'Rapikan sekarang',exact:true}).click();
+   await page.getByText('2 file berhasil diproses',{exact:true}).waitFor();
+   await page.getByRole('button',{name:'Batalkan batch terakhir',exact:true}).click();
+   await page.getByRole('button',{name:'Rapikan sekarang',exact:true}).waitFor();
+   await page.waitForFunction(()=>!window.__organized);
+   await frameFits(page);await page.screenshot({path:join(output,'dante-organizer.png')});
+   await page.getByRole('button',{name:'Lora Email',exact:true}).click();
+   await page.evaluate(()=>window.__holdScan=true);
+   await page.getByRole('button',{name:'Periksa & sortir sekarang',exact:true}).click();
+   await page.waitForFunction(()=>!!window.__finishScan);
+   await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
+   await page.getByRole('button',{name:'Kantor',exact:true}).click();
+   await page.locator('.fit-office .office-worker.is-working').nth(1).waitFor();
+   for(const name of ['Lora','Achi'])assert(await page.locator('.fit-office .office-worker.is-working').filter({hasText:name}).count()===1);
+   await page.screenshot({path:join(output,'lora-achi-at-desks.png')});
+   await page.evaluate(()=>window.__finishScan());
+   await page.waitForFunction(()=>document.querySelectorAll('.fit-office .office-worker.is-working').length===0);
+  }
   await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
   await page.setViewportSize({width:1440,height:900});await page.evaluate(()=>window.__completeFixture=false);
   await page.getByRole('button',{name:'Long conversation'}).first().click();await page.locator('.messages .message').last().waitFor();await frameFits(page);

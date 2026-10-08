@@ -100,6 +100,11 @@ try{
  if($action -like 'mail*'){$mailMutex=New-Object Threading.Mutex($false,('Local\DITASHA-Mail-'+(Mail-Hash $Store).Substring(0,12)));try{$mailLocked=$mailMutex.WaitOne(30000)}catch [Threading.AbandonedMutexException]{$mailLocked=$true};if(!$mailLocked){throw 'Lora sedang memeriksa email. Coba lagi setelah selesai.'}}
  $accounts=@(Load-Json 'mail-accounts.dpapi' $true);$roots=@(Load-Json 'file-roots.json')
  switch($action){
+  'mailOfficePulse' {
+   Save-Json 'office-mail-heartbeat.json' @{seen=[DateTime]::UtcNow.ToString('o')}
+   $due=@(Load-Json 'office-mail-due.json')|Select-Object -First 1
+   $result=@{due=($due -and $due.due -eq $true)}
+  }
   'mailLedgerAck' {$result=Mail-AckLedger (Mail-State) @($request.ids)}
   'mailLedgerEntries' {$result=Mail-LedgerEntries (Mail-State)}
   'mailFinanceContext' {$result=Mail-FinanceContext (Mail-State)}
@@ -113,8 +118,17 @@ try{
   {$_ -in @('emailCheck','emailRead')} {$a=$accounts|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$a){throw 'Akun tidak ditemukan.'};$result=Email $a $action $request.uid}
   'mailStatus' {$result=Mail-View (Mail-State) $request.page $request.mailPage $(if($request.category){$request.category}else{'Semua'}) $(if($request.review){$request.review}else{'Semua'}) $(if($request.paymentType){$request.paymentType}else{'Semua'})}
   'mailPayment' {$state=Mail-State;$result=$state.records|Where-Object {$_.id -eq $request.id -and $_.category -eq 'Keuangan'}|Select-Object -First 1;if(!$result){throw 'Email pembayaran tidak ditemukan.'}}
-  'mailSchedule' {$state=Mail-State;Mail-Schedule ($request.enabled -eq $true);$state.enabled=($request.enabled -eq $true);Mail-Save $state;$result=if($state.enabled){Mail-Scan $state $accounts}else{Mail-View $state}}
-  {$_ -in @('mailScan','mailAutomatic')} {$state=Mail-State;if($action -eq 'mailAutomatic' -and !$state.enabled){$result=@{skipped=$true}}else{$result=Mail-Scan $state $accounts}}
+  'mailSchedule' {$state=Mail-State;Mail-Schedule ($request.enabled -eq $true);$state.enabled=($request.enabled -eq $true);Mail-Save $state;Save-Json 'office-mail-due.json' @{due=$false};$result=if($state.enabled){Mail-Scan $state $accounts}else{Mail-View $state}}
+  {$_ -in @('mailScan','mailAutomatic')} {
+   $state=Mail-State;$defer=$false
+   if($action -eq 'mailAutomatic' -and $state.enabled){
+    $pulse=@(Load-Json 'office-mail-heartbeat.json')|Select-Object -First 1
+    if($pulse){$seen=if($pulse.seen -is [DateTime]){$pulse.seen.ToUniversalTime()}else{[DateTimeOffset]::Parse([string]$pulse.seen).UtcDateTime};$age=([DateTime]::UtcNow-$seen).TotalSeconds;$defer=($age -ge 0 -and $age -lt 300)}
+   }
+   if($action -eq 'mailAutomatic' -and !$state.enabled){Save-Json 'office-mail-due.json' @{due=$false};$result=@{skipped=$true}}
+   elseif($defer){Save-Json 'office-mail-due.json' @{due=$true};$result=@{deferred=$true}}
+   else{$result=Mail-Scan $state $accounts;Save-Json 'office-mail-due.json' @{due=$false}}
+  }
   'mailExport' {$state=Mail-State;$path=Mail-Export $state;Mail-Save $state;$result=@{path=$path}}
   'mailReportData' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){$result=@{available=$false}}else{if((Get-Item -LiteralPath $path).Length -gt 4000000){throw 'Laporan Excel terlalu besar untuk sync. Maksimal 4 MB.'};$result=@{available=$true;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($path))}}}
   'mailReportOpen' {$path=Join-Path $Store 'Reports\Lora-Achi.xlsx';if(![IO.File]::Exists($path)){throw 'Laporan belum tersedia. Jalankan pemeriksaan email dahulu.'};Start-Process -FilePath $path;$result=@{opened=$true}}
@@ -144,6 +158,64 @@ try{
    $r=$roots|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$r){throw 'Folder tidak diizinkan.'};$p=Check-Path $r $request.path
    if([IO.Path]::GetExtension($p) -notmatch '^\.(txt|md|csv|json|html|css|js|ts|tsx|jsx|lua|xml|ini|cfg|log|yaml|yml|sql|py|cs|svg)$' -or (Get-Item -LiteralPath $p).Length -gt 240000){throw 'Pratinjau hanya untuk file teks/kode UTF-8 hingga 240 KB.'}
    $strict=New-Object Text.UTF8Encoding($false,$true);$content=[IO.File]::ReadAllText($p,$strict);if($content.Contains([string][char]0)){throw 'File ini bukan teks.'};$result=@{path=$request.path;content=$content.Substring(0,[Math]::Min(60000,$content.Length));truncated=($content.Length -gt 60000)}
+  }
+  {$_ -in @('fileOrganize','fileUndo')} {
+   $r=$roots|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$r){throw 'Folder tidak diizinkan.'};Check-Root $r
+   $journalName='dante-'+(Mail-Hash $r.id).Substring(0,24)+'.json';$journal=@(Load-Json $journalName)|Select-Object -First 1
+   $moved=0;$errors=@();$batchWatch=[Diagnostics.Stopwatch]::StartNew()
+   if($action -eq 'fileOrganize'){
+    if($journal -and @($journal.entries|Where-Object {$_.status -in @('moving','moved')}).Count){throw 'Batalkan batch terakhir atau pilih Selesai & rapikan lagi sebelum membuat batch baru.'}
+    foreach($marker in @('.git','package.json','pyproject.toml','Cargo.toml','fxmanifest.lua','CMakeLists.txt')){if(Test-Path -LiteralPath (Join-Path $r.path $marker)){throw 'Ini folder proyek. Pilih folder unduhan atau dokumen agar struktur proyek tetap utuh.'}}
+    $candidates=@(Get-ChildItem -LiteralPath $r.path -File -Force|Where-Object {!($_.Attributes -band ([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System)) -and !$_.Name.StartsWith('.')}|Sort-Object Name|Select-Object -First 200)
+    $journal=@{root=$r.path;created=[DateTime]::UtcNow.ToString('o');entries=@()};Save-Json $journalName $journal
+    foreach($f in $candidates){
+     if($batchWatch.Elapsed.TotalSeconds -gt 90){$errors+=@{file='Batch';error='Batas waktu batch tercapai. File tersisa tetap di tempat semula.'};break}
+     $entry=$null
+     try{
+      $category=switch -Regex ($f.Extension.ToLowerInvariant()) {
+       '^\.(pdf|docx?|xlsx?|csv|pptx?|txt|md|odt|ods|rtf)$' {'Dokumen';break}
+       '^\.(png|jpe?g|gif|webp|svg|bmp|heic|tiff?)$' {'Gambar';break}
+       '^\.(mp4|mkv|mov|avi|webm)$' {'Video';break}
+       '^\.(mp3|wav|flac|aac|ogg|m4a)$' {'Audio';break}
+       '^\.(zip|rar|7z|tar|gz)$' {'Arsip';break}
+       '^\.(exe|msi|apk|dmg)$' {'Aplikasi';break}
+       '^\.(ydd|ytd|ydr|yft|ymt|ymap|ytyp|ybn|ycd|ypt)$' {'Aset FiveM';break}
+       '^\.(js|ts|tsx|jsx|html|css|lua|py|json|xml|yaml|yml|sql|cs)$' {'Kode';break}
+       default {'Lainnya'}
+      }
+      $source=Check-Path $r $f.Name;$relative=Join-Path $category $f.Name;$destination=Check-Path $r $relative $false;$suffix=1
+      while(Test-Path -LiteralPath $destination){$relative=Join-Path $category ($f.BaseName+' ('+$suffix+')'+$f.Extension);$destination=Check-Path $r $relative $false;$suffix++}
+      $entry=@{source=$f.Name;destination=$relative;hash=(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash;status='moving'}
+      $journal.entries+=,$entry;Save-Json $journalName $journal
+      $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination));$null=Check-Path $r $relative $false
+      [IO.File]::Move($source,$destination);$entry.status='moved';$moved++;Save-Json $journalName $journal
+     }catch{$errors+=@{file=$f.Name;error=$_.Exception.Message};if($entry -and $entry.status -eq 'moving' -and [IO.File]::Exists($source)){$entry.status='skipped';Save-Json $journalName $journal}}
+    }
+   }else{
+    if(!$journal -or $journal.root -ne $r.path){throw 'Belum ada batch Dante untuk dibatalkan.'}
+    foreach($entry in @($journal.entries|Where-Object {$_.status -in @('moving','moved')})){
+     try{
+      $source=Check-Path $r $entry.destination $false;$destination=Check-Path $r $entry.source $false
+      # Reconcile a crash before moving, or after an undo but before its journal save.
+      if(![IO.File]::Exists($source) -and [IO.File]::Exists($destination) -and (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $entry.hash){$entry.status='undone';Save-Json $journalName $journal;continue}
+      $source=Check-Path $r $entry.destination
+      if(Test-Path -LiteralPath $destination){throw 'Nama asal sudah ada; tidak ditimpa.'}
+      if((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $entry.hash){throw 'File berubah setelah dirapikan; dipertahankan di lokasi sekarang.'}
+      [IO.File]::Move($source,$destination);$entry.status='undone';$moved++;Save-Json $journalName $journal
+     }catch{$errors+=@{file=$entry.destination;error=$_.Exception.Message}}
+    }
+   }
+   $result=@{moved=$moved;errors=@($errors);undoAvailable=(@($journal.entries|Where-Object {$_.status -in @('moving','moved')}).Count -gt 0);entries=@($journal.entries);limit=200}
+  }
+  'fileFinish' {
+   $r=$roots|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$r){throw 'Folder tidak diizinkan.'}
+   $name='dante-'+(Mail-Hash $r.id).Substring(0,24)+'.json';$journal=@(Load-Json $name)|Select-Object -First 1
+   if($journal){foreach($e in $journal.entries){if($e.status -eq 'moving'){throw 'Ada batch terputus. Batalkan dahulu sebelum melanjutkan.'};if($e.status -eq 'moved'){$e.status='finished'}};Save-Json $name $journal};$result=@{finished=$true}
+  }
+  'fileHistory' {
+   $r=$roots|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$r){throw 'Folder tidak diizinkan.'}
+   $journal=@(Load-Json ('dante-'+(Mail-Hash $r.id).Substring(0,24)+'.json'))|Select-Object -First 1
+   $result=@{entries=@($journal.entries|Where-Object {$_});undoAvailable=(@($journal.entries|Where-Object {$_.status -in @('moving','moved')}).Count -gt 0)}
   }
   'fileMove' {
    $r=$roots|Where-Object {$_.id -eq $request.id}|Select-Object -First 1;if(!$r){throw 'Folder tidak diizinkan.'};$source=Check-Path $r $request.path;$destination=Check-Path $r $request.destination $false

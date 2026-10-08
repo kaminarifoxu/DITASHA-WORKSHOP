@@ -39,3 +39,26 @@ await boardOffice.postPlan([]);
 await finishBoard(boardOffice.postPlan([{employee_id:'social',brief:'Research'},{employee_id:'designer',brief:'Design'},{employee_id:'web',brief:'Code'}]));
 boardOffice.setEnabled(false);await boardOffice.assign('social');assert.equal(boardOffice.board[0].status,'working');await boardOffice.report('social');assert.equal(boardOffice.board[0].status,'done');boardOffice.fail();assert.deepEqual(boardOffice.board.map(t=>t.status),['done','failed','failed']);
 console.log('Passed: Amii board posting, all team members collect work, queued desks, board progress and failure state.');
+
+
+const operations=new OfficeEngine();operations.sync(['general','email','finance','files']);
+async function drain(job){let done=false;job.finally(()=>done=true).catch(()=>{});for(let i=0;i<2500&&!done;i++){operations.tick(.05);await Promise.resolve();}assert(done,'desk operation resolves');return job;}
+let finishWork;let invoked=false;
+const sorting=operations.deskWork(['email','finance'],'Sorting',async()=>{
+ invoked=true;for(const id of ['email','finance']){assert.equal(operations.actors[id].node,operations.actors[id].desk);assert.equal(operations.actors[id].phase,'working');}
+ await new Promise(resolve=>finishWork=resolve);
+});
+assert.equal(invoked,false,'native work does not start before arrival');
+for(let i=0;i<1500&&!invoked;i++){operations.tick(.05);await Promise.resolve();}
+assert(invoked);const seated=operations.snapshot();operations.reset();for(let i=0;i<50;i++)operations.tick(.05);
+for(const id of ['email','finance'])assert.deepEqual(operations.snapshot()[id].point,seated[id].point,'reset cannot release a running native operation');
+let secondStarted=false;const second=operations.deskWork(['email'],'Next',async()=>{secondStarted=true;});await Promise.resolve();assert(!secondStarted,'same worker is reserved');
+finishWork();await drain(sorting);await drain(second);assert.equal(operations.actors.email.phase,'idle');assert.equal(operations.actors.finance.phase,'idle');
+await assert.rejects(drain(operations.deskWork(['files'],'Move',async()=>{throw new Error('failure fixture')})),/failure fixture/);assert.equal(operations.actors.files.phase,'idle','failure releases worker');
+operations.setEnabled(false);let chatDone,chatStarted=false;
+const chat=operations.chatWork(async()=>{chatStarted=true;await operations.postPlan([{employee_id:'email',brief:'Mail'}]);await operations.assign('email');await new Promise(resolve=>chatDone=resolve)});
+for(let i=0;i<30&&!chatDone;i++)await Promise.resolve();assert(chatStarted&&chatDone);
+let backgroundStarted=false;const background=operations.deskWork(['email'],'Scheduled',async()=>{backgroundStarted=true});await Promise.resolve();assert(!backgroundStarted);
+chatDone();await drain(chat);await drain(background);assert(!operations.chatBusy);
+assert.equal(operations.actors.email.phase,'idle');
+console.log('Passed: real work starts at desks, workers stay seated, same-worker queue, reset protection, failure release and chat/background lock ordering.');
