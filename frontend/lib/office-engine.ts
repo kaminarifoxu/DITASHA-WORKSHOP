@@ -1,7 +1,7 @@
 import type {TeamStep} from './team-plan';
 import {configureOffice,boardNode,nodes,deskNodes,idleNodes,route,advance,type Point} from './office-motion';
 export type Phase='idle'|'walking'|'assigning'|'returning'|'working'|'reporting'|'receiving'|'queued'|'ready';
-type Actor={point:Point;node:number;path:number[];phase:Phase;pause:number;desk:number;distance:number;facing:number;arrival?:()=>void};
+type Actor={point:Point;node:number;path:number[];phase:Phase;pause:number;desk:number;distance:number;facing:number;direction?:'front'|'back';arrival?:()=>void};
 export class OfficeEngine {
  actors:Record<string,Actor>={}; enabled=true;
  private occupied=new Set<string>(); private changed=new Set<()=>void>();
@@ -43,10 +43,10 @@ export class OfficeEngine {
  fail(){for(const task of this.board)if(task.status!=='done')task.status='failed';}
 
  sync(ids:string[]){if(Object.keys(this.actors).join('|')!==ids.join('|')){for(const a of Object.values(this.actors)){a.arrival?.();a.arrival=undefined;}this.actors={};configureOffice(ids.length);}ids.forEach((id,i)=>{if(!this.actors[id]){const active=!!this.activity[id],n=id==='general'||active?deskNodes[i]:idleNodes[i%idleNodes.length];this.actors[id]={point:{...nodes[n]},node:n,path:[],phase:active?'working':'idle',pause:0,desk:deskNodes[i],distance:0,facing:1};}});for(const id of Object.keys(this.actors))if(!ids.includes(id))delete this.actors[id];}
- snapshot(){return Object.fromEntries(Object.entries(this.actors).map(([id,a])=>[id,{point:{...a.point},phase:a.phase,activity:this.activity[id]||'',walkingFrame:a.path.length?Math.floor(a.distance/1.0)%8:null,facing:a.facing}]));}
+ snapshot(){return Object.fromEntries(Object.entries(this.actors).map(([id,a])=>[id,{point:{...a.point},phase:a.phase,activity:this.activity[id]||'',walkingFrame:a.path.length?Math.floor(a.distance/1.0)%8:null,facing:a.facing,direction:a.direction??'front'}]));}
  setEnabled(enabled:boolean){this.enabled=enabled;if(!enabled)for(const a of Object.values(this.actors)){if(a.path.length&&a.phase!=='walking'){const end=a.path[a.path.length-1];a.node=end;a.point={...nodes[end]};}a.path=[];if(a.phase==='walking')a.phase='idle';const done=a.arrival;a.arrival=undefined;done?.();}}
  tick(seconds:number){for(const a of Object.values(this.actors)){
-  if(a.path.length){const next=a.path[0],m=advance(a.point,nodes[next],Math.min(seconds,1),a.phase==='walking'?12:22);const dx=m.point.x-a.point.x,dy=m.point.y-a.point.y;a.distance+=Math.hypot(dx,dy);if(Math.abs(dx)>.001)a.facing=dx<0?-1:1;a.point=m.point;if(m.arrived){a.node=a.path.shift()!;if(!a.path.length){const done=a.arrival;a.arrival=undefined;if(a.phase==='walking'){a.phase='idle';a.pause=1+Math.random()*2;}done?.();}}}
+  if(a.path.length){const next=a.path[0],m=advance(a.point,nodes[next],Math.min(seconds,1),a.phase==='walking'?12:22);const dx=m.point.x-a.point.x,dy=m.point.y-a.point.y;a.distance+=Math.hypot(dx,dy);if(Math.abs(dx+dy)>.001)a.direction=dx+dy<0?'back':'front';if(Math.abs(dx)>.001)a.facing=dx<0?-1:1;a.point=m.point;if(m.arrived){a.node=a.path.shift()!;if(!a.path.length){const done=a.arrival;a.arrival=undefined;if(a.phase==='walking'){a.phase='idle';a.pause=1+Math.random()*2;}done?.();}}}
   else if(a!==this.actors.general&&a.phase==='idle'&&this.enabled){a.pause-=seconds;if(a.pause<=0){const choices=idleNodes.filter(n=>n!==a.node);a.path=route(a.node,choices[Math.floor(Math.random()*choices.length)]);a.phase='walking';}}
  }}
  async go(id:string,target:number,phase:Phase){const a=this.actors[id];if(!a)return;a.phase=phase;const anchor=a.path[0]??a.node;a.path=[...(a.path.length?[anchor]:[]),...route(anchor,target)];if(!this.enabled||!a.path.length){a.path=[];a.node=target;a.point={...nodes[target]};return;}if(a.path.length)await new Promise<void>(resolve=>{const timeout=setTimeout(()=>{const end=a.path[a.path.length-1];if(end!==undefined){a.node=end;a.point={...nodes[end]};}a.path=[];a.arrival=undefined;resolve();},15000);a.arrival=()=>{clearTimeout(timeout);resolve();};});}

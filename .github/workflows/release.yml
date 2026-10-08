@@ -234,15 +234,13 @@ jobs:
           fi
           git archive --format=zip --prefix=DITASHA-Workspace/ HEAD > release-files/DITASHA-Workspace-Source.zip
           cat > release-notes.md <<'NOTES'
-          Lora and Achi go to their desks before inbox sorting and payment work. Windows scheduled scans hand off to the open office; closed-app scans still run in the background. Employees remain seated during work and resume roaming after success or failure. Chat and operational jobs share employee reservations.
+          New default isometric Pixel office inspired by Claude-Office. Ten distinct characters wear DITASHA black-and-cream varsity jackets with individual accent colors. Front/rear poses, walking motion, seated work, employee portraits and an expanding shared room are connected to real task status.
 
-          Dante now moves files with Rapikan sekarang in the Files tools. Select a connected folder: up to 200 top-level files are grouped by type, with collision-safe names and durable last-batch undo. Existing subfolders and recognized project roots are preserved. Changed files are not overwritten during undo. YDD/YTD/YMT companions share the FiveM category. Save a batch to accept it before organizing another.
+          Retains desk-first email/payment automation, Dante file organization and undo, saved chats, accounts, roles and the Windows updater. Classic 3D and 2D views remain available.
 
-          Refines the shared desktop UI: quieter dark surfaces, consistent controls, readable payment tables, compact navigation and visible employee work status. The 3D Sakura office and existing saved accounts, models and conversations remain available.
+          Includes desk and plant artwork from W17ant/Claude-Office under MIT; attribution and license included. DITASHA character atlases were generated specifically for this application.
 
-          Includes Windows executable, source, Android companion and sync server packages. Account-specific live mail and AI calls still depend on your connected accounts. No automated email sending or money transfers.
-
-          This repository is private. Use your existing read-only GitHub token in app Settings for updates.
+          Windows executable, source, Android companion and sync-server packages are included. Live email and AI calls require your configured accounts.
           NOTES
           gh release create "$TAG" release-files/DITASHA-Workspace.exe release-files/DITASHA-Workspace.exe.sha256 release-files/DITASHA-Workspace-Source.zip release-files/DITASHA-Companion.apk release-files/DITASHA-Companion.apk.sha256 release-files/DITASHA-Sync-Server.zip release-files/DITASHA-Sync-Server.zip.sha256 --target "$GITHUB_SHA" --title "DITASHA Workspace $TAG" --notes-file release-notes.md
 

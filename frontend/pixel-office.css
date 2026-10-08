@@ -1,0 +1,35 @@
+/* Sprite art remains at its native aspect ratio in every employee portrait. */
+.ditasha-person{animation:none!important;image-rendering:auto;filter:drop-shadow(0 2px 1px #0003);overflow:hidden}
+.ditasha-person .ditasha-sprite{display:block;width:100%;height:100%;overflow:hidden;transform:scaleX(var(--facing));transform-origin:center bottom}
+.ditasha-person.stepping .ditasha-sprite{animation:ditasha-step .45s ease-in-out infinite}
+.ditasha-person.working .ditasha-sprite{animation:ditasha-type .65s steps(2,end) infinite}
+.unified-office .office-worker .ditasha-person{width:74px;height:114px}
+.pixel-office-viewport{position:relative;width:100%;height:100%;min-height:0;overflow:hidden;background:radial-gradient(ellipse at 50% 55%,#34443f 0%,#1a2925 75%)}
+.pixel-office-scene.shared-scene{position:absolute;top:50%;left:50%;min-width:0!important;min-height:0!important;max-height:none!important;aspect-ratio:auto!important;transform-origin:center;overflow:visible;isolation:isolate;background:transparent}
+.pixel-room-shell{position:absolute;inset:0;overflow:visible}
+.pixel-desk{position:absolute;width:138px;height:173px;transform:translate(-50%,-100%);pointer-events:none}
+.pixel-desk img{display:block;width:100%;height:100%;object-fit:contain}
+.pixel-desk-label{position:absolute;top:64%;left:10%;padding:3px 7px;border-left:3px solid;background:#253631;color:#d9e7dd;border-radius:3px;font-size:11px;white-space:nowrap;transform:rotate(-26deg)}
+.pixel-office-plant{position:absolute;transform:translate(-50%,-100%);width:66px;height:100px;object-fit:contain;pointer-events:none}
+.pixel-office-worker.office-worker{padding:0;gap:0;width:88px;height:120px;transform:translate(-50%,-100%);background:none;border:none;overflow:visible;transition:none}
+.pixel-office-worker.office-worker .ditasha-person{width:76px;height:114px;position:absolute;bottom:0;left:6px}
+.pixel-office-worker .worker-name{position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:12px!important;line-height:1.1;white-space:nowrap;padding:4px 8px!important;gap:5px;background:#192e29ed;box-shadow:0 2px 5px #0004}
+.pixel-office-worker .worker-activity{bottom:103%;font-size:12px!important;max-width:210px;white-space:normal;width:max-content;line-height:1.4;text-align:center;padding:5px 8px;box-shadow:0 2px 8px #0003}
+.pixel-office-worker.is-working .worker-activity{border-color:#6bcbad;background:#16392f;color:#d4f6e6}
+.pixel-office-worker:hover,.pixel-office-worker:focus-visible{z-index:10000!important;outline:none}
+.pixel-office-worker:focus-visible .worker-name{outline:3px solid #c3eddc;outline-offset:3px}
+.pixel-office-worker:hover .pixel-person{transform:none;filter:drop-shadow(0 0 3px var(--person-color))}
+.pixel-foot-shadow{position:absolute;bottom:-1px;width:46px;height:12px;left:21px;border-radius:50%;background:#19282050}
+.pixel-work-dot{width:6px;height:6px;flex:none;border-radius:50%;background:#8ff0be;box-shadow:0 0 6px #8ff0be}
+.pixel-office-caption{position:absolute;bottom:12px;left:16px;color:#93b2a5;font-size:10px;letter-spacing:2px;pointer-events:none}.pixel-office-caption span{margin:0 7px;color:#63c8a5}
+.pixel-office-viewport[data-motion=off] .ditasha-sprite{animation:none!important}
+.office-section:not(.fit-office) .pixel-office-viewport{height:540px}
+.office-section.compact .pixel-office-viewport{height:320px}
+@keyframes ditasha-step{0%,100%{translate:0 0;rotate:-1.5deg}50%{translate:0 -3px;rotate:1.5deg}}
+@keyframes ditasha-type{0%,100%{translate:0 0}50%{translate:0 1px;rotate:.8deg}}
+@media(prefers-reduced-motion:reduce){.ditasha-person .ditasha-sprite{animation:none!important}}
+@media(max-width:767px){.pixel-office-caption{font-size:8px;letter-spacing:1px;bottom:6px;left:9px}}
+
+.pixel-task-board{position:absolute;width:126px;height:87px;transform:translate(-50%,-100%) skewY(-26.565deg);padding:10px;background:#213c35;border:5px solid #b6a580;border-radius:3px;box-shadow:3px 5px 0 #4c493d;color:#d6e7d6;font-size:10px;text-align:center}.pixel-task-board>div{display:flex;gap:7px;margin-top:9px}.pixel-task-board i{display:block;width:24px;height:27px;background:#e6c47e}.pixel-task-board i:nth-child(2){background:#9bcdb4}.pixel-task-board i:nth-child(3){background:#b3a1d2}
+.pixel-office-worker.is-working .ditasha-person{translate:0 16px;clip-path:inset(0 0 29% 0)}
+.pixel-chair{position:absolute;bottom:3px;left:26px;width:36px;height:41px;border-radius:12px 12px 6px 6px;background:#354b48;border:3px solid #182e2b;box-shadow:3px 4px 0 #15251c55;z-index:1}.pixel-chair:after{content:'';position:absolute;bottom:-7px;left:5px;width:20px;height:6px;border-radius:3px;background:#25332d}

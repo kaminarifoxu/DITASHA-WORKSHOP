@@ -36,13 +36,17 @@ try{
   await page.goto(base);await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').last().waitFor();assert.equal(await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').count(),10+custom);
   for(const viewport of [{width:1280,height:720},{width:1024,height:600},{width:1440,height:900}]){
    await page.setViewportSize(viewport);try{await floorFits(page);}catch(e){await page.screenshot({path:join(output,'failed-office.png')});console.log(await page.locator('.office-workbench,.office-page,.fit-office,.office-viewport,.shared-scene').evaluateAll(es=>es.map(e=>({class:e.className,rect:e.getBoundingClientRect().toJSON()}))));throw e;}
-   assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Real 3D room renders');
+   assert.equal(await page.locator('.fit-office .pixel-office-scene[data-scene-ready=true]').count(),1,'Pixel office is the default');
+   assert.equal(await page.locator('.fit-office .pixel-desk').count(),10+custom,'Every employee has a desk');
+   assert.equal(await page.locator('.fit-office .ditasha-sprite image').count(),10+custom,'Every employee uses the DITASHA atlas');
    if(custom===0)await page.screenshot({path:join(output,'office-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Beranda',exact:true}).click();await page.locator('.home-team-list').waitFor();await frameFits(page);
    assert.equal(await page.locator('.home-dashboard').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false,'Home fits without page scrolling');
    if(custom===0)await page.screenshot({path:join(output,'home-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();await floorFits(page);
   }
+  await page.locator('.fit-office .office-dimension').getByRole('button',{name:'3D',exact:true}).click();await floorFits(page);
+  assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Classic 3D remains available');
   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();await floorFits(page);
   await page.getByRole('checkbox',{name:'Gerak karakter'}).uncheck();
   await page.evaluate(()=>window.__completeFixture=true);
@@ -77,6 +81,10 @@ try{
    await page.waitForFunction(()=>!!window.__finishScan);
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
    await page.getByRole('button',{name:'Kantor',exact:true}).click();
+   await page.locator('.fit-office .pixel-office-worker.is-working').nth(1).waitFor();
+   assert.equal(await page.locator('.fit-office .pixel-office-worker.is-working [data-pose=rear]').count(),2,'Working staff face their desks');
+   await page.screenshot({path:join(output,'pixel-lora-achi-at-desks.png')});
+   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'3D',exact:true}).click();
    await page.locator('.fit-office .office-3d-worker.is-working').nth(1).waitFor();
    await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();
    await page.locator('.fit-office .office-worker.is-working').nth(1).waitFor();
