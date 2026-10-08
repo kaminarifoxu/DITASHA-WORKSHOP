@@ -77,6 +77,8 @@ try{
    await page.waitForFunction(()=>!!window.__finishScan);
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
    await page.getByRole('button',{name:'Kantor',exact:true}).click();
+   await page.locator('.fit-office .office-3d-worker.is-working').nth(1).waitFor();
+   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();
    await page.locator('.fit-office .office-worker.is-working').nth(1).waitFor();
    for(const name of ['Lora','Achi'])assert(await page.locator('.fit-office .office-worker.is-working').filter({hasText:name}).count()===1);
    await page.screenshot({path:join(output,'lora-achi-at-desks.png')});
