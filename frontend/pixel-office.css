@@ -33,3 +33,5 @@
 .pixel-task-board{position:absolute;width:126px;height:87px;transform:translate(-50%,-100%) skewY(-26.565deg);padding:10px;background:#213c35;border:5px solid #b6a580;border-radius:3px;box-shadow:3px 5px 0 #4c493d;color:#d6e7d6;font-size:10px;text-align:center}.pixel-task-board>div{display:flex;gap:7px;margin-top:9px}.pixel-task-board i{display:block;width:24px;height:27px;background:#e6c47e}.pixel-task-board i:nth-child(2){background:#9bcdb4}.pixel-task-board i:nth-child(3){background:#b3a1d2}
 .pixel-office-worker.is-working .ditasha-person{translate:0 16px;clip-path:inset(0 0 29% 0)}
 .pixel-chair{position:absolute;bottom:3px;left:26px;width:36px;height:41px;border-radius:12px 12px 6px 6px;background:#354b48;border:3px solid #182e2b;box-shadow:3px 4px 0 #15251c55;z-index:1}.pixel-chair:after{content:'';position:absolute;bottom:-7px;left:5px;width:20px;height:6px;border-radius:3px;background:#25332d}
+
+.office-art-credit{margin-top:18px;color:#a7c3b6;font-size:12px}.office-art-credit summary{cursor:pointer}.office-art-credit pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 monospace;margin-top:12px}

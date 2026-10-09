@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import {AssistantPerson} from './assistant-person';
 import {officeLayout} from '@/lib/office-motion';
 import {jobActivity} from '@/lib/assignment';
@@ -13,11 +13,11 @@ export function OfficePixel({employees,positions,enabled,busy,onChoose}:{employe
  const width=(1000+floorHeight)*.62+160,height=(1000+floorHeight)*.31+250;
  const project=(x:number,y:number)=>({x:(x-y)*.62+floorHeight*.62+80,y:(x+y)*.31+155});
  const points=(pairs:number[][])=>pairs.map(([x,y])=>{const p=project(x,y);return `${p.x},${p.y}`;}).join(' ');
- const viewport=useRef<HTMLDivElement>(null),[scale,setScale]=useState(.1);
- useEffect(()=>{const el=viewport.current;if(!el)return;const resize=()=>setScale(Math.max(.01,Math.min(el.clientWidth/width,el.clientHeight/height)));const observer=new ResizeObserver(resize);observer.observe(el);resize();return()=>observer.disconnect();},[width,height]);
+ const viewport=useRef<HTMLDivElement>(null),[scale,setScale]=useState(0);
+ useLayoutEffect(()=>{const el=viewport.current;if(!el)return;const resize=()=>{if(el.clientWidth>0&&el.clientHeight>0)setScale(Math.min(el.clientWidth/width,el.clientHeight/height));};const observer=new ResizeObserver(resize);observer.observe(el);resize();return()=>observer.disconnect();},[width,height]);
  const origin=project(0,0),left=project(0,floorHeight),right=project(1000,0);
  return <div className="pixel-office-viewport" ref={viewport} data-motion={enabled?'on':'off'}>
-  <div className="shared-scene pixel-office-scene" style={{width,height,transform:`translate(-50%,-50%) scale(${scale})`}} data-scene-ready="true">
+  <div className="shared-scene pixel-office-scene" style={{width,height,visibility:scale>0?'visible':'hidden',transform:`translate(-50%,-50%) scale(${scale})`}} data-scene-ready="true">
    <svg className="pixel-room-shell" width={width} height={height} aria-hidden="true">
     <polygon points={points([[0,0],[1000,0],[1000,floorHeight],[0,floorHeight]])} fill="#a38e71" stroke="#544f43" strokeWidth="7"/>
     {Array.from({length:Math.ceil(floorHeight/90)},(_,i)=><polyline key={'y'+i} points={points([[0,i*90],[1000,i*90]])} fill="none" stroke="#c0ac8c" strokeWidth="2"/>)}
