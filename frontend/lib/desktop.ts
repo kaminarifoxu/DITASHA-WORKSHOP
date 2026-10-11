@@ -7,7 +7,7 @@ import {parseTrendFeed,trendSources} from './trends';
 import {assignmentPrompt} from './assignment';
 import {resolveTeamPlan,type TeamStep} from './team-plan';
 import {agents, type Employee, type Chat, type Message, type Project} from './workspace';
-import {FREE_CODING_MODEL} from './ai-policy';
+import {FREE_CODING_MODEL,isCodingEmployee} from './ai-policy';
 
 type SyncReceipt={id:string;chatId:string|null;status:'prepared'|'running'|'completed'|'failed';resultId?:string;result?:string};
 type State={version:1;projects:Project[];chats:Chat[];employees:Employee[];messages:Message[];ai?:AIConfig;recommendedPreset?:1;money?:Money;syncJobs?:SyncReceipt[]};
@@ -162,10 +162,12 @@ async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
    const attachments=validateAttachments(body.attachments),reference=fileContext(attachments);
    const team=[...agents,...next.employees];
    const config=validateAIConfig(next.ai),[chatgpt,keys]:[ChatGPTInfo,KeyStatus]=await Promise.all([native('chatgptStatus'),native('apiKeyStatus')]);
-   const askAI=(worker:Employee,messages:{role:string;content:string}[])=>{if(new TextEncoder().encode(JSON.stringify(messages)).length>480000)throw new Error('Konteks percakapan terlalu besar. Mulai chat baru atau kurangi lampiran.');const route=resolveEmployeeRoute(worker,config,keys.provider,chatgpt);if(route.provider!=='chatgpt'&&!keys.keys[route.provider])throw new Error('API key '+route.provider+' untuk '+worker.name+' belum disimpan.');return native('aiEmployee',JSON.stringify({employee_id:worker.id,...route,messages}));};
+   const askAI=(worker:Employee,messages:{role:string;content:string}[],codingOverride=false)=>{if(new TextEncoder().encode(JSON.stringify(messages)).length>480000)throw new Error('Konteks percakapan terlalu besar. Mulai chat baru atau kurangi lampiran.');const routeWorker=codingOverride?{...worker,role:'Software developer reviewer'}:worker;const route=resolveEmployeeRoute(routeWorker,config,keys.provider,chatgpt);if(route.provider!=='chatgpt'&&!keys.keys[route.provider])throw new Error('API key '+route.provider+' untuk '+worker.name+' belum disimpan.');return native('aiEmployee',JSON.stringify({employee_id:worker.id,...route,messages}));};
    let employee=team.find(e=>e.id===chat.agent)!;
    let brief=text;
    let steps:TeamStep[]=[];
+   let workSteps:TeamStep[]=[];
+   let reviewStep:TeamStep|undefined;
    {
     const history=next.messages.filter(m=>m.chat_id===chat.id).slice(-8);
     const project=next.projects.find(p=>p.id===chat.project_id);
@@ -173,8 +175,10 @@ async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
     const raw=dispatch?.choices?.[0]?.message?.content;
     let plan;try{plan=JSON.parse(typeof raw==='string'?raw.replace(/^```(?:json)?\s*|\s*```$/g,'').trim():'');}catch{throw new Error('Amii belum dapat membagi tugas. Coba kirim lagi.');}
     steps=resolveTeamPlan(plan,text,team);
-    employee=team.find(e=>e.id===steps[0].employee_id)!;brief=steps[0].brief;
-    await body.onPlan?.(steps);
+    reviewStep=steps.length>1&&steps.at(-1)?.employee_id==='general'?steps.at(-1):undefined;
+    workSteps=reviewStep?steps.slice(0,-1):steps;
+    employee=team.find(e=>e.id===workSteps[0].employee_id)!;brief=workSteps[0].brief;
+    await body.onPlan?.(workSteps);
 
    }
    const project=next.projects.find(p=>p.id===chat.project_id);
@@ -197,13 +201,13 @@ async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
      });toolCache.set(worker.id,job);toolQueue=job.catch(()=>{});
     }return toolCache.get(worker.id)!;
    };
-   const ask=async(worker:Employee,task:string,extra='')=>{
+   const ask=async(worker:Employee,task:string,extra='',codingOverride=false)=>{
     const evidence=await workerTools(worker);
-    const result=await askAI(worker,[{role:'system',content:contextFor(worker)+extra+evidence},...history.map(m=>({role:m.role,content:m.content+fileContext(m.attachments||[])})),{role:'user',content:task+reference}]);
+    const result=await askAI(worker,[{role:'system',content:contextFor(worker)+extra+evidence},...history.map(m=>({role:m.role,content:m.content+fileContext(m.attachments||[])})),{role:'user',content:task+reference}],codingOverride);
     const answer=result?.choices?.[0]?.message?.content;if(typeof answer!=='string'||!answer.trim())throw new Error('AI belum memberikan jawaban. Coba lagi.');return answer;
    };
    let delivered:string;
-   if(steps.length>1){
+   if(workSteps.length>1){
     const contributions:{employee_id:string;name:string;brief:string;result:string}[]=[];
     let evidence='';
     const runContribution=async(step:TeamStep,prior:typeof contributions)=>{
@@ -222,15 +226,15 @@ async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
       ' This is a coordinated team project. Produce your own concrete contribution using supplied team results. Do not return routing JSON or claim to browse design sites.');
      return {employee_id:worker.id,name:worker.name,brief:step.brief,result:answer};
     };
-    const parallelWebsite=steps.length===3&&steps.map(s=>s.employee_id).join('|')==='social|designer|web';
+    const parallelWebsite=workSteps.length===3&&workSteps.map(s=>s.employee_id).join('|')==='social|designer|web';
     if(parallelWebsite){
      await body.onAssign?.('social');
-     contributions.push(await runContribution(steps[0],[]));
+     contributions.push(await runContribution(workSteps[0],[]));
      await body.onBoardReport?.('social');
      // Both collect the same published research before either API request starts.
-     await Promise.all(steps.slice(1).map(step=>body.onAssign?.(step.employee_id)));
+     await Promise.all(workSteps.slice(1).map(step=>body.onAssign?.(step.employee_id)));
      const prior=contributions.slice();
-     const results=await Promise.allSettled(steps.slice(1).map(async step=>{
+     const results=await Promise.allSettled(workSteps.slice(1).map(async step=>{
       const result=await runContribution(step,prior);await body.onReady?.(step.employee_id);return result;
      }));
      const failed=results.find(r=>r.status==='rejected');if(failed?.status==='rejected')throw failed.reason;
@@ -242,7 +246,7 @@ async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
      if(body.onReportTogether)await body.onReportTogether(['designer','web']);
      else await Promise.all(['designer','web'].map(id=>body.onReport?.(id)));
     }else{
-     for(const step of steps){
+     for(const step of workSteps){
       await body.onAssign?.(step.employee_id);contributions.push(await runContribution(step,contributions.slice()));await body.onReport?.(step.employee_id);
      }
     }
@@ -263,6 +267,16 @@ async function apiInner(url:string,body?:any,method='POST'):Promise<any>{
     await body.onAssign?.(employee.id);
     const answer=await ask(employee,brief===text?text:JSON.stringify({original_request:text,task_from_Amii:brief}));
     await body.onReport?.(employee.id);delivered=employee.id!=='general'?'Amii · Hasil dari '+employee.name+'\n\n'+answer:answer;
+   }
+   if(reviewStep){
+    const codingReview=workSteps.some(step=>{const worker=team.find(e=>e.id===step.employee_id);return !!worker&&isCodingEmployee(worker);});
+    const specialistContext=workSteps.map(step=>{const worker=team.find(e=>e.id===step.employee_id)!;return {name:worker.name,role:worker.role,instruction:worker.instruction};});
+    officeEngine.beginReview(reviewStep.brief);
+    try{
+     const review=await ask(agents[0],JSON.stringify({original_request:text,manager_task:reviewStep.brief,draft_answer:delivered}),
+      ' Final manager review. Check the specialist work for omissions, conflicts, unsafe claims and user constraints. Give concise corrections or confirmation before the detailed team output. Specialist roles/instructions: '+JSON.stringify(specialistContext),codingReview);
+     delivered='Amii · Review final\n'+review+'\n\n'+delivered;officeEngine.finishReview();
+    }catch(error){officeEngine.fail();throw error;}
    }
    const messages:Message[]=[{id:crypto.randomUUID(),chat_id:chat.id,role:'user',content:text,created:now,...(attachments.length?{attachments}:{})},{id:crypto.randomUUID(),chat_id:chat.id,role:'assistant',content:delivered,created:now+1}];
    next.messages.push(...messages);chat.updated=now;chat.title=history.length?chat.title:text.slice(0,60);
@@ -296,4 +310,3 @@ export async function cloudSnapshot(){
 }
 
 export async function cloudReceipts(ids:string[]){await ready();return (state!.syncJobs||[]).filter(r=>ids.includes(r.id)&&['completed','failed'].includes(r.status)).map(r=>({id:r.id,status:r.status,result:r.result||state!.messages.find(m=>m.id===r.resultId)?.content||''}));}
-
