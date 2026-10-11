@@ -4,5 +4,5 @@ import Workspace from './Workspace';
 import './styles.css';
 import './studio.css';
 import './pixel-office.css';
+import './management-dashboard.css';
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Workspace/></React.StrictMode>);
-
