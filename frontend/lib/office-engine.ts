@@ -2,14 +2,23 @@ import type {TeamStep} from './team-plan';
 import {configureOffice,boardNode,nodes,deskNodes,idleNodes,route,advance,type Point} from './office-motion';
 export type Phase='idle'|'walking'|'assigning'|'returning'|'working'|'reporting'|'receiving'|'queued'|'ready';
 export type BoardTask={employee_id:string;brief:string;status:'queued'|'working'|'ready'|'done'|'failed'};
+export type CompletedTask={employee_id:string;brief:string;completedAt:number;handedTo?:string};
 type Actor={point:Point;node:number;path:number[];phase:Phase;pause:number;desk:number;distance:number;facing:number;direction?:'front'|'back';arrival?:()=>void};
-const BOARD_KEY='ditasha-task-board-v1';
+const BOARD_KEY='ditasha-task-board-v1',HISTORY_KEY='ditasha-task-history-v1';
 function loadBoard():BoardTask[]{
  if(typeof window==='undefined')return [];
  try{
   const value=JSON.parse(localStorage.getItem(BOARD_KEY)||'[]');
   if(!Array.isArray(value))return [];
   return value.filter((t:any)=>t&&typeof t.employee_id==='string'&&typeof t.brief==='string'&&t.brief.length<=16000&&['queued','working','ready','done','failed'].includes(t.status)).slice(0,12);
+ }catch{return [];}
+}
+function loadHistory():CompletedTask[]{
+ if(typeof window==='undefined')return [];
+ try{
+  const value=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]');
+  if(!Array.isArray(value))return [];
+  return value.filter((t:any)=>t&&typeof t.employee_id==='string'&&typeof t.brief==='string'&&t.brief.length<=16000&&Number.isFinite(t.completedAt)&&(t.handedTo===undefined||typeof t.handedTo==='string')).slice(0,40);
  }catch{return [];}
 }
 export class OfficeEngine {
@@ -41,7 +50,15 @@ export class OfficeEngine {
   }
  }
  board:BoardTask[]=loadBoard();
+ history:CompletedTask[]=loadHistory();
  private persistBoard(){if(typeof window!=='undefined')try{localStorage.setItem(BOARD_KEY,JSON.stringify(this.board.slice(0,12)));}catch{}}
+ private persistHistory(){if(typeof window!=='undefined')try{localStorage.setItem(HISTORY_KEY,JSON.stringify(this.history.slice(0,40)));}catch{}}
+ private completeTask(task:BoardTask|undefined,handedTo?:string){
+  if(!task||task.status==='done')return;
+  task.status='done';
+  this.history=[{employee_id:task.employee_id,brief:task.brief,completedAt:Date.now(),...(handedTo?{handedTo}:{})},...this.history].slice(0,40);
+  this.persistHistory();
+ }
  async postPlan(steps:TeamStep[]){
   if(!this.chatRelease)this.chatRelease=await this.reserve(steps.map(s=>s.employee_id));
   this.board=steps.map(s=>({...s,status:'queued'}));this.persistBoard();
@@ -65,7 +82,7 @@ export class OfficeEngine {
   const ami=this.actors.general,w=this.actors[worker];if(!ami||!w)return;
   let task=this.board.find(t=>t.employee_id===worker&&t.status==='queued');
   if(!task){await this.postPlan([{employee_id:worker,brief:'Tugas dari Amii'}]);task=this.board[0];}
-  if(worker==='general'){task.status='working';ami.phase='working';this.persistBoard();return;}
+  if(worker==='general'){task.status='working';ami.phase='working';this.activity.general='Reviewing team work';this.persistBoard();return;}
   await this.go(worker,boardNode,'receiving');
   w.point.x+=6+(Object.keys(this.actors).indexOf(worker)%3)*5;
   await this.go(worker,w.desk,'returning');task.status='working';w.phase='working';ami.phase='receiving';this.persistBoard();
@@ -73,7 +90,7 @@ export class OfficeEngine {
  async publishResult(worker:string){
   const w=this.actors[worker];if(!w)return;
   await this.go(worker,boardNode,'reporting');
-  const task=this.board.find(t=>t.employee_id===worker);if(task)task.status='done';
+  const task=this.board.find(t=>t.employee_id===worker);this.completeTask(task);
   await this.go(worker,w.desk,'returning');w.phase='ready';this.persistBoard();
  }
  ready(worker:string){const a=this.actors[worker];if(a)a.phase='ready';const task=this.board.find(t=>t.employee_id===worker);if(task)task.status='ready';this.persistBoard();}
@@ -93,11 +110,10 @@ export class OfficeEngine {
   }else{
    await this.go(worker,ami.desk,'reporting');if(worker!=='general')w.point.x+=7;w.phase='receiving';
   }
-  if(task)task.status='done';this.persistBoard();
+  this.completeTask(task,next?.employee_id);if(worker==='general')delete this.activity.general;this.persistBoard();
  }
 
  reset(){this.chatRelease?.();this.chatRelease=undefined;for(const [id,a] of Object.entries(this.actors)){if(this.activity[id])continue;a.arrival?.();a.arrival=undefined;a.path=[];a.phase='idle';a.pause=.6;}}
 }
 export const officeEngine=new OfficeEngine();
 export type OfficePositions=ReturnType<OfficeEngine['snapshot']>;
-
