@@ -1,4 +1,5 @@
 import {requestedEmployee} from './assignment';
+import {deterministicSpecialistPlan} from './specialist-routing';
 import type {Employee} from './workspace';
 export type TeamStep={employee_id:string;brief:string};
 export function resolveTeamPlan(raw:unknown,text:string,team:Employee[]):TeamStep[]{
@@ -7,15 +8,13 @@ export function resolveTeamPlan(raw:unknown,text:string,team:Employee[]):TeamSte
  const requested=requestedEmployee(text,team);
  if(!p||!valid({employee_id:p.employee_id,brief:p.brief}))throw new Error('Pembagian tugas Amii tidak valid. Coba lagi.');
  if(requested)return [{employee_id:requested.id,brief:text}];
- // Website creation always includes research, design and implementation, even if a router selects only Sora.
- const website=/\b(landing[ -]?page|website|web[ -]?site|situs|halaman web)\b/i.test(text);
- const build=/\b(buat(?:kan)?|bikin|bangun|create|build|make|develop|design)\b/i.test(text);
- const repair=/\b(fix|debug|error|perbaiki|rusak)\b/i.test(text);
- if(website&&build&&!repair)return [
-  {employee_id:'social',brief:'Research audience fit and content/market direction for this website. Use supplied live Google search trends only when relevant. Suggest design directions as your recommendations, not as verified design popularity. Original request: '+text},
-  {employee_id:'designer',brief:'Develop the landing-page visual design: layout, hierarchy, palette, typography, responsive behavior and components. Use Mika’s research and the shared brief; you work alongside Sora. Original request: '+text},
-  {employee_id:'web',brief:'Deliver complete usable landing-page code and setup instructions based on Mika’s research and the shared brief. Create an initial implementation alongside Luna; a final integration pass will apply her design. Preserve the original requirements. Original request: '+text}
- ];
+
+ // Obvious domain work should not depend on the router model making the perfect choice.
+ // Amii still coordinates the work, but deterministic routing keeps design, FiveM, web,
+ // social, writing, planning, email, finance and file jobs with their actual specialists.
+ const deterministic=deterministicSpecialistPlan(text,team);
+ if(deterministic)return deterministic;
+
  if(p.steps!==undefined){
   if(!Array.isArray(p.steps)||p.steps.length<1||p.steps.length>6||!p.steps.every(valid)||new Set(p.steps.map(s=>s.employee_id)).size!==p.steps.length||(p.steps.length>1&&p.steps.some(s=>s.employee_id==='general')))throw new Error('Rencana kerja tim Amii tidak valid. Coba lagi.');
   return p.steps;
