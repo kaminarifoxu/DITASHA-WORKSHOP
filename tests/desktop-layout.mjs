@@ -8,7 +8,7 @@ const server=createServer((req,res)=>{try{const pathname=new URL(req.url,'http:/
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,executablePath:process.env.DITASHA_CHROME_EXECUTABLE||undefined,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 async function frameFits(page){assert.deepEqual(await page.evaluate(()=>({x:document.documentElement.scrollWidth>innerWidth,y:document.documentElement.scrollHeight>innerHeight,scroll:document.scrollingElement.scrollTop})),{x:false,y:false,scroll:0});}
-async function floorFits(page){await page.waitForFunction(()=>{const v=document.querySelector('.fit-office .office-viewport');if(!v)return false;const b=v.getBoundingClientRect(),canvas=v.querySelector('.office-3d-render[data-scene-ready=true] canvas');if(canvas){const c=canvas.getBoundingClientRect();return b.height>100&&Math.abs(c.width-b.width)<2&&Math.abs(c.height-b.height)<2;}const scene=v.querySelector('.shared-scene');if(!scene)return false;const s=scene.getBoundingClientRect();return b.height>100&&s.left>=b.left-1&&s.right<=b.right+1&&s.top>=b.top-1&&s.bottom<=b.bottom+1;});assert.equal(await page.locator('.fit-office .office-viewport').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false);await frameFits(page);}
+async function floorFits(page){await page.waitForFunction(()=>{const v=document.querySelector('.fit-office .office-viewport');if(!v)return false;const b=v.getBoundingClientRect(),canvas=v.querySelector('.office-3d-render[data-scene-ready=true] canvas');if(canvas){const c=canvas.getBoundingClientRect();return b.height>100&&Math.abs(c.width-b.width)<2&&Math.abs(c.height-b.height)<2;}const scene=v.querySelector('.shared-scene');if(!scene)return false;const s=scene.getBoundingClientRect();const fills=!scene.classList.contains('pixel-office-scene')||Math.max(s.width/b.width,s.height/b.height)>.98;return fills&&b.height>100&&s.left>=b.left-1&&s.right<=b.right+1&&s.top>=b.top-1&&s.bottom<=b.bottom+1;});assert.equal(await page.locator('.fit-office .office-viewport').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false);await frameFits(page);}
 
 try{
  for(const custom of [0,8]){
@@ -36,13 +36,17 @@ try{
   await page.goto(base);await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').last().waitFor();assert.equal(await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').count(),10+custom);
   for(const viewport of [{width:1280,height:720},{width:1024,height:600},{width:1440,height:900}]){
    await page.setViewportSize(viewport);try{await floorFits(page);}catch(e){await page.screenshot({path:join(output,'failed-office.png')});console.log(await page.locator('.office-workbench,.office-page,.fit-office,.office-viewport,.shared-scene').evaluateAll(es=>es.map(e=>({class:e.className,rect:e.getBoundingClientRect().toJSON()}))));throw e;}
-   assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Real 3D room renders');
+   assert.equal(await page.locator('.fit-office .pixel-office-scene[data-scene-ready=true]').count(),1,'Pixel office is the default');
+   assert.equal(await page.locator('.fit-office .pixel-desk').count(),10+custom,'Every employee has a desk');
+   assert.equal(await page.locator('.fit-office .ditasha-sprite image').count(),10+custom,'Every employee uses the DITASHA atlas');
    if(custom===0)await page.screenshot({path:join(output,'office-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Beranda',exact:true}).click();await page.locator('.home-team-list').waitFor();await frameFits(page);
    assert.equal(await page.locator('.home-dashboard').evaluate(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth),false,'Home fits without page scrolling');
    if(custom===0)await page.screenshot({path:join(output,'home-'+viewport.width+'.png')});
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();await floorFits(page);
   }
+  await page.locator('.fit-office .office-dimension').getByRole('button',{name:'3D',exact:true}).click();await floorFits(page);
+  assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Classic 3D remains available');
   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();await floorFits(page);
   await page.getByRole('checkbox',{name:'Gerak karakter'}).uncheck();
   await page.evaluate(()=>window.__completeFixture=true);
@@ -77,6 +81,11 @@ try{
    await page.waitForFunction(()=>!!window.__finishScan);
    await page.getByRole('button',{name:'Kantor virtual',exact:true}).click();
    await page.getByRole('button',{name:'Kantor',exact:true}).click();
+   await page.locator('.fit-office .pixel-office-worker.is-working').nth(1).waitFor();
+   assert.equal(await page.locator('.fit-office .pixel-office-worker.is-working [data-pose=rear]').count(),2,'Working staff face their desks');
+   await floorFits(page);
+   await page.screenshot({path:join(output,'pixel-lora-achi-at-desks.png')});
+   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'3D',exact:true}).click();
    await page.locator('.fit-office .office-3d-worker.is-working').nth(1).waitFor();
    await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();
    await page.locator('.fit-office .office-worker.is-working').nth(1).waitFor();

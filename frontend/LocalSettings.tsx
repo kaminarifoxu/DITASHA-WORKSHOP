@@ -1,4 +1,5 @@
 import {useRef,useState} from 'react';
+import officeLicense from './assets/ditasha-office/LICENSE-Claude-Office.txt?raw';
 import APISettings from './APISettings';
 import type {AIConfig,KeyStatus,ChatGPTInfo} from './lib/ai-settings';
 import type {Employee} from './lib/workspace';
@@ -18,5 +19,6 @@ export default function LocalSettings({refresh,workflowBusy=false,config,keys,ch
  <APISettings config={config} keys={keys} chatgpt={chatgpt} employees={employees} locked={workflowBusy} refresh={refresh}/>
  <div className="security-note"><Lock size={22}/><div><h3>Workspace berjalan di PC.</h3><p>Proyek, catatan, karyawan, dan chat tersimpan di PC ini. Pesan dan konteks proyek dikirim ke penyedia yang dipilih untuk setiap karyawan. Login dilakukan di browser resmi OpenAI.</p></div></div>
  <UpdateSettings/><section className="settings-card"><h2>Backup lokal</h2><p>Export data sebelum pindah PC atau mengimpor backup. API key dan sesi ChatGPT tidak ikut di dalam backup.</p><div className="local-actions"><button className="outline" disabled={workflowBusy||busy} onClick={()=>void backup()}><Download size={16}/> Export backup</button><button className="outline" disabled={workflowBusy||busy} onClick={()=>input.current?.click()}><Upload size={16}/> Import backup</button><input ref={input} type="file" accept=".json,application/json" hidden onChange={e=>void restore(e.target.files?.[0])}/></div></section>
- <section className="settings-card"><h2>DITASHA Workspace Local</h2><dl><div><dt>Versi</dt><dd>Windows x64 · versi di panel update</dd></div><div><dt>Penyimpanan</dt><dd>PC ini · folder LocalAppData DITASHA</dd></div><div><dt>AI</dt><dd>ChatGPT / OpenRouter / Groq / Gemini / OpenAI API / API khusus</dd></div></dl></section></div>;
+ <section className="settings-card"><h2>DITASHA Workspace Local</h2><dl><div><dt>Versi</dt><dd>Windows x64 · versi di panel update</dd></div><div><dt>Penyimpanan</dt><dd>PC ini · folder LocalAppData DITASHA</dd></div><div><dt>AI</dt><dd>ChatGPT / OpenRouter / Groq / Gemini / OpenAI API / API khusus</dd></div></dl><details className="office-art-credit"><summary>Kredit ilustrasi kantor</summary><p>Desk and plant artwork: W17ant / Claude-Office. DITASHA character artwork generated for this app.</p><pre>{officeLicense}</pre></details></section></div>;
 }
+

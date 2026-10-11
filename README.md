@@ -1,3 +1,10 @@
+## v3.21.0 · DITASHA pixel office
+
+- New default Pixel view: an expanding isometric office inspired by W17ant/Claude-Office, with upstream desk and plant artwork.
+- Ten distinct DITASHA varsity-jacket characters, front/rear poses, animated movement and seated work. Portraits use the same team artwork.
+- Existing work reservations, email/payment automation, Dante organize/undo, account settings and saved chats are retained. Pixel, 3D and 2D views use the same live office controller.
+- Original Claude-Office attribution and MIT license are included in THIRD-PARTY.txt and frontend/assets/ditasha-office/LICENSE-Claude-Office.txt.
+
 ## v3.20.0 · Desk work and Dante organizer
 
 Lora and Achi arrive at their desks before sorting mail, updating payment reviews or recording money. While the app is open, its heartbeat hands Windows scheduled scans to the office queue. After closing or a crash, an expired heartbeat restores background scanning (a scan queued just before closing can wait until the next Windows schedule). Work completes or fails before employees resume roaming. Chat jobs and operational tools reserve employees to prevent conflicting movements.
