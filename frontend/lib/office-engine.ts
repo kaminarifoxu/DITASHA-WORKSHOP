@@ -68,7 +68,20 @@ export class OfficeEngine {
   for(const id of ids){const a=this.actors[id];a.path=[];a.phase='queued';}
   await this.go('general',this.actors.general.desk,'returning');this.actors.general.phase='receiving';
  }
- fail(){for(const task of this.board)if(task.status!=='done')task.status='failed';this.persistBoard();}
+ beginReview(brief:string){
+  let task=this.board.find(t=>t.employee_id==='general'&&t.status==='queued');
+  if(!task){task={employee_id:'general',brief,status:'queued'};this.board=[...this.board,task].slice(-12);}
+  task.brief=brief;task.status='working';this.activity.general='Reviewing final work';
+  const ami=this.actors.general;if(ami){ami.path=[];ami.phase='working';ami.node=ami.desk;ami.point={...nodes[ami.desk]};}
+  this.persistBoard();
+ }
+ finishReview(){
+  const task=this.board.find(t=>t.employee_id==='general'&&['queued','working','ready'].includes(t.status));
+  this.completeTask(task);delete this.activity.general;
+  const ami=this.actors.general;if(ami){ami.path=[];ami.phase='ready';ami.pause=1;}
+  this.persistBoard();
+ }
+ fail(){for(const task of this.board)if(task.status!=='done')task.status='failed';delete this.activity.general;this.persistBoard();}
 
  sync(ids:string[]){if(Object.keys(this.actors).join('|')!==ids.join('|')){for(const a of Object.values(this.actors)){a.arrival?.();a.arrival=undefined;}this.actors={};configureOffice(ids.length);}ids.forEach((id,i)=>{if(!this.actors[id]){const active=!!this.activity[id],n=id==='general'||active?deskNodes[i]:idleNodes[i%idleNodes.length];this.actors[id]={point:{...nodes[n]},node:n,path:[],phase:active?'working':'idle',pause:0,desk:deskNodes[i],distance:0,facing:1};}});for(const id of Object.keys(this.actors))if(!ids.includes(id))delete this.actors[id];}
  snapshot(){return Object.fromEntries(Object.entries(this.actors).map(([id,a])=>{const task=this.board.find(t=>t.employee_id===id&&!['done','failed'].includes(t.status));return [id,{point:{...a.point},phase:a.phase,activity:this.activity[id]||'',assignment:task?.brief||'',walkingFrame:a.path.length?Math.floor(a.distance/1.0)%8:null,facing:a.facing,direction:a.direction??'front'}];}));}
@@ -102,8 +115,8 @@ export class OfficeEngine {
  async report(worker:string){
   const ami=this.actors.general,w=this.actors[worker];if(!ami||!w)return;
   const taskIndex=this.board.findIndex(t=>t.employee_id===worker&&(t.status==='working'||t.status==='ready'));
-  const task=taskIndex>=0?this.board[taskIndex]:undefined,next=taskIndex>=0?this.board.slice(taskIndex+1).find(t=>t.status==='queued'):undefined;
-  if(worker!=='general'&&next&&next.employee_id!=='general'&&this.actors[next.employee_id]){
+  const task=taskIndex>=0?this.board[taskIndex]:undefined,next=taskIndex>=0?this.board.slice(taskIndex+1).find(t=>t.status==='queued'&&t.employee_id!=='general'):undefined;
+  if(worker!=='general'&&next&&this.actors[next.employee_id]){
    const receiver=this.actors[next.employee_id];this.activity[worker]='Handoff ke '+next.employee_id;
    await this.go(worker,receiver.desk,'reporting');w.point.x+=7;
    delete this.activity[worker];w.phase='receiving';
