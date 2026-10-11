@@ -68,17 +68,20 @@ dispatchTarget='developer';failWorker=true;events.length=0;
 await assert.rejects(api('/api/chat',{chat_id:gc.id,content:'Test',onAssign:async id=>events.push(id),onReport:async()=>events.push('report')}),/Worker quota/);assert.deepEqual(events,['developer']);assert.equal(await exportBackup(),stable);
 console.log('Passed: Amii delegation, custom employees, coding route, handoff order, invalid assignment, worker failure and unchanged saved history.');
 failWorker=false;
-for(const [target,request,name] of [['writer','Buat caption Instagram','Nara'],['planner','Susun rencana belajar','Kira']]){
+for(const [target,request,name,expectedEvents] of [
+ ['writer','Buat caption Instagram','Nara',['social','report:social','writer','report:writer']],
+ ['planner','Susun rencana belajar','Kira',['planner','report:planner']]
+]){
  dispatchTarget=target;events.length=0;
  const result=await api('/api/chat',{chat_id:gc.id,content:request,onAssign:async id=>events.push(id),onReport:async id=>events.push('report:'+id)});
- assert.equal(lastOp,'ai');assert.deepEqual(events,[target,'report:'+target]);assert(result.messages[1].content.includes('Hasil dari '+name));
+ assert.equal(lastOp,'ai');assert.deepEqual(events,expectedEvents);assert(result.messages[1].content.includes('Hasil dari '+name));
 }
 const designer=await api('/api/workspace',{type:'employee',name:'Luna',role:'Desainer logo',instruction:'Design logos and brand identities',avatar:3});
 dispatchTarget=designer.id;
 let assigned='';await api('/api/chat',{chat_id:gc.id,content:'Buat konsep logo',onAssign:async id=>assigned=id});assert.equal(assigned,designer.id);assert.equal(lastOp,'ai');assert(lastMessages[0].content.includes('Design logos'));assert(dispatchPrompt.includes('Design logos and brand identities'));assert(dispatchPrompt.includes('writer (Nara)'));assert(dispatchPrompt.includes('planner (Kira)'));
 dispatchTarget='developer';
 const explicit=await api('/api/chat',{chat_id:gc.id,content:'Minta Nara membantu: buat artikel',onAssign:async id=>assigned=id});assert.equal(assigned,'writer');assert.equal(lastOp,'ai');assert(explicit.messages[1].content.includes('Hasil dari Nara'));
-console.log('Passed: Nara writing, Kira planning, custom role delegation, and explicit employee selection overriding incorrect router choice.');
+console.log('Passed: Nara writing, Kira planning, custom role delegation, social-content research handoff, and explicit employee selection overriding incorrect router choice.');
 dispatchTarget='social';events.length=0;
 const social=await api('/api/chat',{chat_id:gc.id,content:'Cari tren untuk konten komunitas',onAssign:async id=>events.push('assign:'+id),onReport:async id=>events.push('report:'+id)});
 assert.deepEqual(events,['assign:social','report:social','assign:writer','report:writer']);assert(social.messages[1].content.includes('Mika → Nara'));assert(social.messages[1].content.includes('https://example.com/story'));assert(social.messages[1].content.includes('Diambil:'));assert(lastMessages.at(-1).content.includes('FiveM community update'));
@@ -128,7 +131,8 @@ config.employees={general:{provider:'groq',model:'amii-model'},social:{provider:
 await api('/api/ai-settings',{config});
 let multiStatus=await api('/api/workspace');assert.equal(multiStatus.model,'amii-model');assert.equal(multiStatus.provider,'groq');assert.equal(multiStatus.connected,true);
 aiCalls.length=0;await api('/api/chat',{chat_id:gc.id,content:'Build a landing page website'});
-assert.deepEqual(aiCalls.map(c=>[c.route.employee_id,c.route.provider,c.route.model]),[['general','groq','amii-model'],['social','gemini','mika-model'],['designer','chatgpt','account-general'],['web','groq','sora-code'],['web','groq','sora-code']]);
+assert.deepEqual(aiCalls.map(c=>[c.route.employee_id,c.route.provider,c.route.model]),[['general','groq','amii-model'],['social','gemini','mika-model'],['designer','chatgpt','account-general'],['web','groq','sora-code'],['web','groq','sora-code'],['general','groq','amii-model']]);
+assert.equal(aiCalls.at(-1).route.coding,true,'Amii uses coding review mode for code-heavy team output');
 assert(aiCalls.every(c=>c.route.employee_id&&Array.isArray(c.route.messages)));
 const cfgBackup=await exportBackup();assert.equal(JSON.parse(cfgBackup).ai.employees.web.model,'sora-code');assert(!cfgBackup.includes('test-access'));assert(!cfgBackup.includes('API_KEY'));
 await importBackup(cfgBackup);assert.equal((await api('/api/workspace')).aiConfig.employees.social.provider,'gemini');
@@ -138,8 +142,8 @@ const badConfig=structuredClone(config);badConfig.providers.custom.baseUrl='http
 badConfig.providers.custom.baseUrl='file:///tmp/key';await assert.rejects(api('/api/ai-settings',{config:badConfig}),/tidak valid/);
 const paid=structuredClone(config);paid.providers.openrouter.general='paid/model';await assert.rejects(api('/api/ai-settings',{config:paid}),/gratis/);
 const unknown=structuredClone(config);unknown.employees.missing={provider:'groq',model:'x'};await assert.rejects(api('/api/ai-settings',{config:unknown}),/tidak valid/);
-config.employees[e.id]={provider:'custom',model:'custom-code'};await api('/api/ai-settings',{config});dispatchTarget=e.id;aiCalls.length=0;await api('/api/chat',{chat_id:c.id,content:'Help with code'});assert.equal(aiCalls.at(-1).route.provider,'custom');assert.equal(aiCalls.at(-1).route.baseUrl,'https://models.example.test/v1');assert.equal(aiCalls.at(-1).route.model,'custom-code');
-console.log('Passed: mixed-provider website pipeline, employee overrides, custom endpoints, saved/backup model choices, missing-key preservation and invalid/paid configuration rejection.');
+config.employees[e.id]={provider:'custom',model:'custom-code'};await api('/api/ai-settings',{config});dispatchTarget=e.id;aiCalls.length=0;await api('/api/chat',{chat_id:c.id,content:'Help with code'});const customCodeCall=aiCalls.find(c=>c.route.employee_id===e.id);assert.equal(customCodeCall.route.provider,'custom');assert.equal(customCodeCall.route.baseUrl,'https://models.example.test/v1');assert.equal(customCodeCall.route.model,'custom-code');assert.equal(aiCalls.at(-1).route.employee_id,'general');assert.equal(aiCalls.at(-1).route.coding,true);
+console.log('Passed: mixed-provider website pipeline, manager coding review, employee overrides, custom endpoints, saved/backup model choices, missing-key preservation and invalid/paid configuration rejection.');
 
 const {validateAttachments,generatedFiles,safeFilename}=await import('../frontend/test-build/chat-files.mjs');
 assert.throws(()=>validateAttachments([{name:'photo.png',content:'binary'}]));
@@ -201,8 +205,8 @@ chatgptStatus={provider:'openrouter',connected:false,permitted:false,models:[]};
 for(const [id,name] of [['finance','Achi'],['email','Lora'],['files','Dante']]){
  const chat=await ops.api('/api/workspace',{type:'chat',agent:'general',project_id:null});
  await ops.api('/api/chat',{chat_id:chat.id,content:'Minta '+name+' membantu: tinjau catatan yang diberikan'});
- assert.equal(aiCalls.at(-1).route.employee_id,id);
- if(id==='finance')assert(aiCalls.at(-1).messages[0].content.includes('6500000'),'Achi sees real ledger arithmetic');
+ const employeeCall=aiCalls.findLast(c=>c.route.employee_id===id);assert(employeeCall,'Expected routed call for '+id);
+ if(id==='finance')assert(employeeCall.messages[0].content.includes('6500000'),'Achi sees real ledger arithmetic');
 }
 const afterRestart=await import('../frontend/test-build/desktop.mjs?money-restart');assert.equal((await afterRestart.api('/api/workspace')).money.transactions.length,2);
 await afterRestart.api('/api/money',{action:'delete',id:ledger.transactions[0].id});assert.equal((await afterRestart.api('/api/workspace')).money.transactions.length,1);
@@ -211,8 +215,8 @@ console.log('Passed: Achi/Lora/Dante routing, distinct avatars, new employee mod
 for(const [name,id,text,operation] of [['Lora','email','cek inbox email','emailCheck'],['Dante','files','periksa file folder','fileList']]){
  const chat=await afterRestart.api('/api/workspace',{type:'chat',agent:'general',project_id:null});
  await afterRestart.api('/api/chat',{chat_id:chat.id,content:'Minta '+name+' membantu: '+text});
- assert.equal(aiCalls.at(-1).route.employee_id,id);assert(toolCalls.some(c=>c.action===operation));
- assert(aiCalls.at(-1).messages[0].content.includes(id==='email'?'Meeting':'notes.txt'));
+ const employeeCall=aiCalls.findLast(c=>c.route.employee_id===id);assert(employeeCall,'Expected routed call for '+id);assert(toolCalls.some(c=>c.action===operation));
+ assert(employeeCall.messages[0].content.includes(id==='email'?'Meeting':'notes.txt'));
 }
 assert(!toolCalls.some(c=>['emailRead','fileRead','fileMove'].includes(c.action)),'Chat metadata checks do not read content or change files');
 console.log('Passed: Lora inbox and Dante inventory checks provide real tool evidence to AI without automatic content reads or modifications.');
@@ -229,8 +233,9 @@ const analysisChat=await afterRestart.api('/api/workspace',{type:'chat',agent:'g
 mailPayments=[{id:'c'.repeat(64),review:'pending',paymentType:'Bukti pembayaran',currency:'USD',amount:5,subject:'You paid to Merchant for invoice 4323'}];
 await afterRestart.api('/api/chat',{chat_id:analysisChat.id,content:'Minta Achi membantu: analisis keuangan 2026-10 dan email pembayaran Lora'});
 assert(toolCalls.some(c=>c.action==='mailFinanceContext'));
-assert(aiCalls.at(-1).messages[0].content.includes('You paid to Merchant for invoice 4323'));
-assert(aiCalls.at(-1).messages[0].content.includes('An empty ledger does not mean no payment emails exist'));
+const financeCall=aiCalls.findLast(c=>c.route.employee_id==='finance');assert(financeCall);
+assert(financeCall.messages[0].content.includes('You paid to Merchant for invoice 4323'));
+assert(financeCall.messages[0].content.includes('An empty ledger does not mean no payment emails exist'));
 console.log('Passed: Achi receives pending payment email evidence separately from the recorded ledger.');
 console.log('Passed: reviewed IDR-only email ledger import, authoritative native evidence, disk failure preservation and duplicate-safe retry after partial handoff failure.');
 
@@ -287,4 +292,3 @@ await syncRestart.api('/api/chats/delete',{id:prepared.chatId});
 await syncRestart.importBackup(await syncRestart.exportBackup());
 assert.equal((await syncRestart.api('/api/sync/prepare',{id:remoteId,type:'chat',agent:'general'})).status,'completed');
 console.log('Passed: durable phone completion/restart, no repeated AI work, interrupted-job review, snapshot privacy and atomic receipt persistence.');
-
