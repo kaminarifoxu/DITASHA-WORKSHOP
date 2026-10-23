@@ -11,7 +11,7 @@ function statusFor(id:string,task:BoardTask|undefined,phase:string|undefined):Da
  if(task?.status==='done'||task?.status==='ready'||phase==='ready')return 'Done';
  return 'Idle';
 }
-export function ManagementDashboard({employees,positions,board,history}:{employees:Employee[];positions:OfficePositions;board:BoardTask[];history:CompletedTask[]}){
+export function ManagementDashboard({employees,positions,board,history,onInspect}:{employees:Employee[];positions:OfficePositions;board:BoardTask[];history:CompletedTask[];onInspect?:(id:string)=>void}){
  const rows=employees.map(employee=>{
   const task=board.find(t=>t.employee_id===employee.id&&!['failed'].includes(t.status))||board.find(t=>t.employee_id===employee.id);
   const state=positions[employee.id];
@@ -32,7 +32,7 @@ export function ManagementDashboard({employees,positions,board,history}:{employe
   <div className="management-grid">
    <div className="employee-status-grid">
     {rows.map(({employee,task,status,handoff,completed})=><article className="employee-status-card" key={employee.id} style={{'--employee-color':employee.color} as React.CSSProperties}>
-     <div className="employee-status-top"><span className="employee-status-dot"/><div><strong>{employee.name}</strong><small>{employee.role}</small></div><em className={'employee-status-badge status-'+status.toLowerCase()}>{status}</em></div>
+     <div className="employee-status-top"><span className="employee-status-dot"/><div><button className="employee-details-link" onClick={()=>onInspect?.(employee.id)} aria-label={'Detail '+employee.name}>{employee.name}</button><small>{employee.role}</small></div><em className={'employee-status-badge status-'+status.toLowerCase()}>{status}</em></div>
      <p title={task?.brief}>{task?.brief?short(task.brief):status==='Idle'?'Available for new work':'Waiting for next assignment'}</p>
      <div className="employee-status-meta"><span><CheckCircle2 size={13}/>{completed.length} completed</span>{handoff&&<span className="handoff-chip">Handoff <ArrowRight size={12}/> {handoff.name}</span>}</div>
     </article>)}

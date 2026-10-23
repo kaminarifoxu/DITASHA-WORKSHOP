@@ -37,9 +37,9 @@ export function OfficePixel({employees,positions,enabled,busy,onChoose}:{employe
     const facing=walking?(back?-(state?.facing??1):(state?.facing??1)):1;
     const assignment=state?.assignment?.trim();
     const assignmentLabel=assignment?(assignment.length>78?assignment.slice(0,75)+'…':assignment):'';
-    const activity=state?.activity||assignmentLabel||(working?jobActivity(a):phase==='returning'?'Menuju meja':phase==='reporting'?'Menyerahkan hasil':phase==='receiving'?'Menerima tugas':phase==='ready'?'Menunggu rekan tim':phase==='queued'?'Menunggu giliran':walking?'Jalan-jalan':'Siap membantu');
-    return <button key={a.id} disabled={busy} onClick={()=>onChoose(a.id)} className={'office-worker pixel-office-worker '+(working?'is-working ':'')+(walking?'is-walking ':'')} style={{left:p.x,top:p.y,zIndex:Math.round(p.y),'--person-color':a.color} as React.CSSProperties} aria-label={'Chat dengan '+a.name+', '+a.role} title={a.name+' · '+(assignment||activity)}>
-     <span className="worker-activity">{activity}</span><span className="pixel-foot-shadow"/>{working&&<span className="pixel-chair"/>}
+    const activity=state?.speech||state?.activity||assignmentLabel||(working?jobActivity(a):phase==='returning'?'Menuju meja':phase==='reporting'?'Menyerahkan hasil':phase==='receiving'?'Menerima tugas':phase==='ready'?'Menunggu rekan tim':phase==='queued'?'Menunggu giliran':walking?'Jalan-jalan':'Siap membantu');
+    return <button key={a.id}  onClick={()=>onChoose(a.id)} className={'office-worker pixel-office-worker '+(working?'is-working ':'')+(walking?'is-walking ':'')} style={{left:p.x,top:p.y,zIndex:Math.round(p.y),'--person-color':a.color} as React.CSSProperties} aria-label={'Detail '+a.name+', '+a.role} title={a.name+' · '+(assignment||activity)}>
+     <span className={'worker-activity '+(state?.speech?'has-speech':'')}>{activity}</span><span className="pixel-foot-shadow"/>{working&&<span className="pixel-chair"/>}
      <AssistantPerson index={a.avatar} working={working} frame={state?.walkingFrame??null} facing={facing} back={back} animate={enabled} className=""/>
      <span className="worker-name">{working&&<span className="pixel-work-dot"/>}{a.name}</span>
     </button>;

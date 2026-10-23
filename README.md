@@ -1,3 +1,9 @@
+## v3.25.0 · Employee activity and details
+
+Click an employee in Pixel, 3D or 2D, the roster, or the company dashboard to inspect their current work, role, session activity and saved completed contributions. **Beri tugas melalui Amii** starts the existing coordinated chat flow; details remain readable during AI and local desk operations. Escape closes the panel and returns keyboard focus.
+
+Short speech bubbles follow actual brief pickup, desk arrival, team waiting, handoffs, manager review and task failures. These are local status messages with no additional AI calls. Bubbles expire after six seconds even when character movement is off. The latest 24 activity events stay in memory for the current app session. Contribution counts describe the office's existing rolling 40-entry history, not lifetime performance. Saved chats, accounts and workflows retain their existing storage.
+
 ## v3.21.0 · DITASHA pixel office
 
 - New default Pixel view: an expanding isometric office inspired by W17ant/Claude-Office, with upstream desk and plant artwork.
