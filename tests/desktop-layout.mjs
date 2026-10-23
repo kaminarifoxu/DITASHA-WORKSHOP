@@ -57,7 +57,8 @@ try{
   assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Classic 3D remains available');
   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();await floorFits(page);
   await page.getByRole('checkbox',{name:'Gerak karakter'}).uncheck();
-  await page.locator('.fit-office .office-worker').filter({hasText:'Rei'}).click();
+  if(custom===0)await page.locator('.fit-office .office-worker').filter({hasText:'Rei'}).click();
+  else await page.locator('.fit-office .employee-details-link').filter({hasText:'Rei'}).click();
   await page.getByRole('dialog',{name:'Rei',exact:true}).waitFor();
   await page.getByRole('button',{name:'Tutup detail karyawan'}).click();
   await page.evaluate(()=>window.__completeFixture=true);
