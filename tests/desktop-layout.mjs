@@ -20,7 +20,7 @@ try{
     if(op==='load')data=stored;else if(op==='save')stored=JSON.parse(payload);else if(op==='hasKey')data=true;else if(op==='apiKeyStatus')data={provider:'openrouter',keys:{openrouter:true,groq:false,gemini:false,openai:false,custom:false}};
     else if(op==='chatgptStatus')data=status;else if(op==='syncStatus')data={paired:false};else if(op==='hasGithubToken')data=false;else if(op==='updateStatus')data={current:'3.17.0',status:'Ready',version:'',ready:false,automatic:true};
     else if(op==='assistantTools')data=JSON.parse(payload).action==='status'?{accounts:[{id:'saved-one',label:'Personal',email:'one@example.test',host:'imap.example.test'},{id:'saved-two',label:'Work',email:'two@example.test',host:'imap.example.test'}],roots:[]}:{enabled:false,lastRun:'',lastError:'',exportError:'',total:0,paymentTotal:0,mailTotal:0,pending:0,counts:{},messages:[],payments:JSON.parse(payload).action==='mailStatus'?[{id:'f'.repeat(64),subject:'Discord payment failed',account:'one@example.test',paymentType:'Pembayaran gagal',review:'sorted',amount:null,currency:'',reason:'Tidak ada uang keluar',date:'2026-10-07'},{id:'e'.repeat(64),subject:'You paid to Merchant',account:'one@example.test',paymentType:'Bukti pembayaran',review:'sorted',amount:3,currency:'USD',reason:'Disortir otomatis',date:'2026-10-07'}]:[],accounts:[],reportPath:'',schedule:{registered:false,nextRun:'',lastResult:null}};
-    else if(op==='aiEmployee'){const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON')){if(!window.__completeFixture)return;data={choices:[{message:{content:'Completed inline office chat test.'}}]};queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));return;}data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:(window.__completeFixture?['writer']:['writer','planner','developer','designer','web','finance']).map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
+    else if(op==='aiEmployee'){window.__aiCalls=(window.__aiCalls||0)+1;const route=JSON.parse(payload);if(!route.messages[0].content.includes('Return ONLY JSON')){if(!window.__completeFixture)return;data={choices:[{message:{content:'Completed inline office chat test.'}}]};queueMicrotask(()=>callback({data:{id:Number(id),ok:true,data}}));return;}data={choices:[{message:{content:JSON.stringify({employee_id:'writer',brief:'Create a plan',steps:(window.__completeFixture?['writer']:['writer','planner','developer','designer','web','finance']).map(employee_id=>({employee_id,brief:'Prepare the assigned contribution for the shared task'}))})}}]};}
     if(op==='assistantTools'){
      const request=JSON.parse(payload);
      if(request.action==='status')data.roots=[{id:'fixture-folder',path:'C:\\Workspace Files'}];
@@ -34,6 +34,14 @@ try{
    }}};
   },custom);
   await page.goto(base);await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').last().waitFor();assert.equal(await page.locator('.fit-office .office-worker,.fit-office .office-3d-worker').count(),10+custom);
+  await page.locator('.fit-office .employee-details-link').filter({hasText:'Luna'}).click();
+  const details=page.getByRole('dialog',{name:'Luna',exact:true});await details.waitFor();
+  assert(await details.getByText('Desain & branding',{exact:true}).isVisible());
+  assert(await details.getByRole('button',{name:'Beri tugas melalui Amii'}).isEnabled());
+  assert.equal(await page.evaluate(()=>window.__aiCalls||0),0,'opening details makes no AI request');
+  await page.screenshot({path:join(output,'employee-details-'+custom+'.png')});
+  await page.keyboard.press('Escape');await details.waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Luna','Escape restores keyboard focus');
   for(const viewport of [{width:1280,height:720},{width:1024,height:600},{width:1440,height:900}]){
    await page.setViewportSize(viewport);try{await floorFits(page);}catch(e){await page.screenshot({path:join(output,'failed-office.png')});console.log(await page.locator('.office-workbench,.office-page,.fit-office,.office-viewport,.shared-scene').evaluateAll(es=>es.map(e=>({class:e.className,rect:e.getBoundingClientRect().toJSON()}))));throw e;}
    assert.equal(await page.locator('.fit-office .pixel-office-scene[data-scene-ready=true]').count(),1,'Pixel office is the default');
@@ -49,6 +57,10 @@ try{
   assert.equal(await page.locator('.fit-office .office-3d-render[data-scene-ready=true] canvas').count(),1,'Classic 3D remains available');
   await page.locator('.fit-office .office-dimension').getByRole('button',{name:'2D',exact:true}).click();await floorFits(page);
   await page.getByRole('checkbox',{name:'Gerak karakter'}).uncheck();
+  if(custom===0)await page.locator('.fit-office .office-worker').filter({hasText:'Rei'}).click();
+  else await page.locator('.fit-office .employee-details-link').filter({hasText:'Rei'}).click();
+  await page.getByRole('dialog',{name:'Rei',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Tutup detail karyawan'}).click();
   await page.evaluate(()=>window.__completeFixture=true);
   await page.getByRole('button',{name:'Chat baru di kantor'}).click();
   await page.getByRole('textbox',{name:'Pesan untuk AI'}).fill('Test inline office reply');await page.getByRole('button',{name:'Kirim pesan',exact:true}).click();
@@ -84,6 +96,10 @@ try{
    await page.locator('.fit-office .pixel-office-worker.is-working').nth(1).waitFor();
    assert.equal(await page.locator('.fit-office .pixel-office-worker.is-working [data-pose=rear]').count(),2,'Working staff face their desks');
    await floorFits(page);
+   await page.locator('.fit-office .employee-details-link').filter({hasText:'Lora'}).click();
+   const workingDetails=page.getByRole('dialog',{name:'Lora',exact:true});await workingDetails.waitFor();
+   assert(await workingDetails.getByRole('button',{name:'Beri tugas melalui Amii'}).isDisabled(),'busy employee details stay readable without starting another task');
+   await page.getByRole('button',{name:'Tutup detail karyawan'}).click();
    await page.screenshot({path:join(output,'pixel-lora-achi-at-desks.png')});
    await page.locator('.fit-office .office-dimension').getByRole('button',{name:'3D',exact:true}).click();
    await page.locator('.fit-office .office-3d-worker.is-working').nth(1).waitFor();

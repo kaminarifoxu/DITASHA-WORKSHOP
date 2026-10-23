@@ -2,6 +2,8 @@ name: Build and release desktop, Android and sync server
 on:
   push:
     branches: [main, 'codex/workspace-v320']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

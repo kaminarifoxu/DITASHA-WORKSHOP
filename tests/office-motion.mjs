@@ -62,3 +62,22 @@ let backgroundStarted=false;const background=operations.deskWork(['email'],'Sche
 chatDone();await drain(chat);await drain(background);assert(!operations.chatBusy);
 assert.equal(operations.actors.email.phase,'idle');
 console.log('Passed: real work starts at desks, workers stay seated, same-worker queue, reset protection, failure release and chat/background lock ordering.');
+
+const activityOffice=new OfficeEngine();activityOffice.sync(['general','designer','web']);activityOffice.setEnabled(false);
+assert.equal(activityOffice.events.length,0,'idle office does not invent conversations');
+await activityOffice.postPlan([{employee_id:'designer',brief:'Design system'},{employee_id:'web',brief:'Implementation'}]);
+await activityOffice.assign('designer');
+assert.match(activityOffice.snapshot().designer.speech,/Mulai bekerja/);
+activityOffice.ready('designer');assert.match(activityOffice.snapshot().designer.speech,/Menunggu rekan/);
+await activityOffice.report('designer');
+assert.equal(activityOffice.events[0].target,'web','handoff identifies its recipient');
+assert.equal(activityOffice.history.filter(e=>e.employee_id==='designer').length,1);
+const count=activityOffice.events.length;await activityOffice.report('designer');assert.equal(activityOffice.events.length,count,'repeated report does not invent another completion');
+activityOffice.tick(7);assert.equal(activityOffice.snapshot().designer.speech,'','speech expires with movement disabled');
+activityOffice.beginReview('Final review');assert.match(activityOffice.snapshot().general.speech,/meninjau/);activityOffice.finishReview();assert.equal(activityOffice.board.at(-1).status,'done');
+activityOffice.fail();assert.match(activityOffice.snapshot().web.speech,/terhenti/);assert.equal(activityOffice.board[1].status,'failed');
+assert.equal(activityOffice.history.some(e=>e.employee_id==='web'),false,'failed work is not counted as completed');
+for(let i=0;i<50;i++)activityOffice.beginReview('Review '+i);
+assert.equal(activityOffice.events.length,24,'session activity stays bounded');
+assert.equal(activityOffice.events[0].id>activityOffice.events[23].id,true,'newest activity first');
+console.log('Passed: actual task speech, named handoff recipient, review/failure states, duplicate completion guard, bubble expiry with motion off and bounded session history.');

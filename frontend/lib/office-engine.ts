@@ -2,6 +2,7 @@ import type {TeamStep} from './team-plan';
 import {configureOffice,boardNode,nodes,deskNodes,idleNodes,route,advance,type Point} from './office-motion';
 export type Phase='idle'|'walking'|'assigning'|'returning'|'working'|'reporting'|'receiving'|'queued'|'ready';
 export type BoardTask={employee_id:string;brief:string;status:'queued'|'working'|'ready'|'done'|'failed'};
+export type OfficeEvent={id:number;employee_id:string;target?:string;text:string;createdAt:number};
 export type CompletedTask={employee_id:string;brief:string;completedAt:number;handedTo?:string};
 type Actor={point:Point;node:number;path:number[];phase:Phase;pause:number;desk:number;distance:number;facing:number;direction?:'front'|'back';arrival?:()=>void};
 const BOARD_KEY='ditasha-task-board-v1',HISTORY_KEY='ditasha-task-history-v1';
@@ -32,6 +33,14 @@ export class OfficeEngine {
   this.chatRelease=release;
   try{return await work();}finally{this.reset();}
  }
+ events:OfficeEvent[]=[];
+ private eventId=0;
+ private clock=0;
+ private speech:Record<string,{text:string;until:number}>={};
+ private announce(employee_id:string,text:string,target?:string){
+  this.events=[{id:++this.eventId,employee_id,text,createdAt:Date.now(),...(target?{target}:{})},...this.events].slice(0,24);
+  this.speech[employee_id]={text,until:this.clock+6};
+ }
  activity:Record<string,string>={};
  private async reserve(ids:string[]){
   while(ids.some(id=>this.occupied.has(id)))await new Promise<void>(resolve=>this.changed.add(resolve));
@@ -43,7 +52,7 @@ export class OfficeEngine {
   try{
    ids.forEach(id=>{this.activity[id]='Menuju meja · '+label;});
    await Promise.all(ids.map(id=>this.actors[id]?this.go(id,this.actors[id].desk,'returning'):Promise.resolve()));
-   ids.forEach(id=>{if(this.actors[id])this.actors[id].phase='working';this.activity[id]=label;});
+   ids.forEach(id=>{if(this.actors[id])this.actors[id].phase='working';this.activity[id]=label;this.announce(id,label);});
    return await work();
   }finally{
    ids.forEach(id=>{delete this.activity[id];const a=this.actors[id];if(a){a.path=[];a.phase='idle';a.pause=1;}});release();
@@ -58,12 +67,14 @@ export class OfficeEngine {
   task.status='done';
   this.history=[{employee_id:task.employee_id,brief:task.brief,completedAt:Date.now(),...(handedTo?{handedTo}:{})},...this.history].slice(0,40);
   this.persistHistory();
+  this.announce(task.employee_id,handedTo?'Hasil diserahkan ke rekan tim.':'Kontribusi selesai diserahkan.',handedTo);
  }
  async postPlan(steps:TeamStep[]){
   if(!this.chatRelease)this.chatRelease=await this.reserve(steps.map(s=>s.employee_id));
   this.board=steps.map(s=>({...s,status:'queued'}));this.persistBoard();
   const ids=steps.map(s=>s.employee_id).filter(id=>id!=='general'&&this.actors[id]);
   if(!ids.length)return;
+  this.announce('general','Brief tim sudah dipasang di papan.');
   await this.go('general',boardNode,'assigning');
   for(const id of ids){const a=this.actors[id];a.path=[];a.phase='queued';}
   await this.go('general',this.actors.general.desk,'returning');this.actors.general.phase='receiving';
@@ -73,6 +84,7 @@ export class OfficeEngine {
   if(!task){task={employee_id:'general',brief,status:'queued'};this.board=[...this.board,task].slice(-12);}
   task.brief=brief;task.status='working';this.activity.general='Reviewing final work';
   const ami=this.actors.general;if(ami){ami.path=[];ami.phase='working';ami.node=ami.desk;ami.point={...nodes[ami.desk]};}
+  this.announce('general','Sedang meninjau hasil akhir tim.');
   this.persistBoard();
  }
  finishReview(){
@@ -81,12 +93,12 @@ export class OfficeEngine {
   const ami=this.actors.general;if(ami){ami.path=[];ami.phase='ready';ami.pause=1;}
   this.persistBoard();
  }
- fail(){for(const task of this.board)if(task.status!=='done')task.status='failed';delete this.activity.general;this.persistBoard();}
+ fail(){for(const task of this.board)if(task.status!=='done'){task.status='failed';this.announce(task.employee_id,'Tugas terhenti. Periksa pesan kesalahan di chat.');}delete this.activity.general;this.persistBoard();}
 
  sync(ids:string[]){if(Object.keys(this.actors).join('|')!==ids.join('|')){for(const a of Object.values(this.actors)){a.arrival?.();a.arrival=undefined;}this.actors={};configureOffice(ids.length);}ids.forEach((id,i)=>{if(!this.actors[id]){const active=!!this.activity[id],n=id==='general'||active?deskNodes[i]:idleNodes[i%idleNodes.length];this.actors[id]={point:{...nodes[n]},node:n,path:[],phase:active?'working':'idle',pause:0,desk:deskNodes[i],distance:0,facing:1};}});for(const id of Object.keys(this.actors))if(!ids.includes(id))delete this.actors[id];}
- snapshot(){return Object.fromEntries(Object.entries(this.actors).map(([id,a])=>{const task=this.board.find(t=>t.employee_id===id&&!['done','failed'].includes(t.status));return [id,{point:{...a.point},phase:a.phase,activity:this.activity[id]||'',assignment:task?.brief||'',walkingFrame:a.path.length?Math.floor(a.distance/1.0)%8:null,facing:a.facing,direction:a.direction??'front'}];}));}
+ snapshot(){return Object.fromEntries(Object.entries(this.actors).map(([id,a])=>{const task=this.board.find(t=>t.employee_id===id&&!['done','failed'].includes(t.status));return [id,{point:{...a.point},phase:a.phase,activity:this.activity[id]||'',assignment:task?.brief||'',walkingFrame:a.path.length?Math.floor(a.distance/1.0)%8:null,facing:a.facing,direction:a.direction??'front',speech:(this.speech[id]?.until??0)>this.clock?this.speech[id].text:''}];}));}
  setEnabled(enabled:boolean){this.enabled=enabled;if(!enabled)for(const a of Object.values(this.actors)){if(a.path.length&&a.phase!=='walking'){const end=a.path[a.path.length-1];a.node=end;a.point={...nodes[end]};}a.path=[];if(a.phase==='walking')a.phase='idle';const done=a.arrival;a.arrival=undefined;done?.();}}
- tick(seconds:number){for(const a of Object.values(this.actors)){
+ tick(seconds:number){this.clock+=Math.max(0,seconds);for(const a of Object.values(this.actors)){
   if(a.path.length){const next=a.path[0],m=advance(a.point,nodes[next],Math.min(seconds,1),a.phase==='walking'?12:22);const dx=m.point.x-a.point.x,dy=m.point.y-a.point.y;a.distance+=Math.hypot(dx,dy);if(Math.abs(dx+dy)>.001)a.direction=dx+dy<0?'back':'front';if(Math.abs(dx)>.001)a.facing=dx<0?-1:1;a.point=m.point;if(m.arrived){a.node=a.path.shift()!;if(!a.path.length){const done=a.arrival;a.arrival=undefined;if(a.phase==='walking'){a.phase='idle';a.pause=1+Math.random()*2;}done?.();}}}
   else if(a!==this.actors.general&&a.phase==='idle'&&this.enabled){a.pause-=seconds;if(a.pause<=0){const choices=idleNodes.filter(n=>n!==a.node);a.path=route(a.node,choices[Math.floor(Math.random()*choices.length)]);a.phase='walking';}}
  }}
@@ -96,9 +108,10 @@ export class OfficeEngine {
   let task=this.board.find(t=>t.employee_id===worker&&t.status==='queued');
   if(!task){await this.postPlan([{employee_id:worker,brief:'Tugas dari Amii'}]);task=this.board[0];}
   if(worker==='general'){task.status='working';ami.phase='working';this.activity.general='Reviewing team work';this.persistBoard();return;}
+  this.announce(worker,'Mengambil brief dari papan Amii.');
   await this.go(worker,boardNode,'receiving');
   w.point.x+=6+(Object.keys(this.actors).indexOf(worker)%3)*5;
-  await this.go(worker,w.desk,'returning');task.status='working';w.phase='working';ami.phase='receiving';this.persistBoard();
+  await this.go(worker,w.desk,'returning');task.status='working';w.phase='working';ami.phase='receiving';this.announce(worker,'Brief diterima. Mulai bekerja di meja.');this.persistBoard();
  }
  async publishResult(worker:string){
   const w=this.actors[worker];if(!w)return;
@@ -106,8 +119,8 @@ export class OfficeEngine {
   const task=this.board.find(t=>t.employee_id===worker);this.completeTask(task);
   await this.go(worker,w.desk,'returning');w.phase='ready';this.persistBoard();
  }
- ready(worker:string){const a=this.actors[worker];if(a)a.phase='ready';const task=this.board.find(t=>t.employee_id===worker);if(task)task.status='ready';this.persistBoard();}
- integrate(worker:string){const a=this.actors[worker];if(a)a.phase='working';const task=this.board.find(t=>t.employee_id===worker);if(task)task.status='working';this.persistBoard();}
+ ready(worker:string){const a=this.actors[worker];if(a)a.phase='ready';const task=this.board.find(t=>t.employee_id===worker);if(task)task.status='ready';this.announce(worker,'Kontribusi siap. Menunggu rekan tim.');this.persistBoard();}
+ integrate(worker:string){const a=this.actors[worker];if(a)a.phase='working';const task=this.board.find(t=>t.employee_id===worker);if(task)task.status='working';this.announce(worker,'Menggabungkan kontribusi tim.');this.persistBoard();}
  async reportTogether(ids:string[]){
   await Promise.all(ids.map(async(id,i)=>{await this.report(id);if(this.actors[id])this.actors[id].point.x+=i*8;}));
  }
